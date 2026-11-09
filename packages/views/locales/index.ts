@@ -4,6 +4,7 @@ import enAuth from "./en/auth.json";
 import enSettings from "./en/settings.json";
 import enIssues from "./en/issues.json";
 import enAgents from "./en/agents.json";
+import enLocalRuns from "./en/local_runs.json";
 import enEditor from "./en/editor.json";
 import enOnboarding from "./en/onboarding.json";
 import enInvite from "./en/invite.json";
@@ -29,6 +30,7 @@ import zhHansAuth from "./zh-Hans/auth.json";
 import zhHansSettings from "./zh-Hans/settings.json";
 import zhHansIssues from "./zh-Hans/issues.json";
 import zhHansAgents from "./zh-Hans/agents.json";
+import zhHansLocalRuns from "./zh-Hans/local_runs.json";
 import zhHansEditor from "./zh-Hans/editor.json";
 import zhHansOnboarding from "./zh-Hans/onboarding.json";
 import zhHansInvite from "./zh-Hans/invite.json";
@@ -54,6 +56,7 @@ import zhHantAuth from "./zh-Hant/auth.json";
 import zhHantSettings from "./zh-Hant/settings.json";
 import zhHantIssues from "./zh-Hant/issues.json";
 import zhHantAgents from "./zh-Hant/agents.json";
+import zhHantLocalRuns from "./zh-Hant/local_runs.json";
 import zhHantEditor from "./zh-Hant/editor.json";
 import zhHantOnboarding from "./zh-Hant/onboarding.json";
 import zhHantInvite from "./zh-Hant/invite.json";
@@ -79,6 +82,7 @@ import koAuth from "./ko/auth.json";
 import koSettings from "./ko/settings.json";
 import koIssues from "./ko/issues.json";
 import koAgents from "./ko/agents.json";
+import koLocalRuns from "./ko/local_runs.json";
 import koEditor from "./ko/editor.json";
 import koOnboarding from "./ko/onboarding.json";
 import koInvite from "./ko/invite.json";
@@ -104,6 +108,7 @@ import jaAuth from "./ja/auth.json";
 import jaSettings from "./ja/settings.json";
 import jaIssues from "./ja/issues.json";
 import jaAgents from "./ja/agents.json";
+import jaLocalRuns from "./ja/local_runs.json";
 import jaEditor from "./ja/editor.json";
 import jaOnboarding from "./ja/onboarding.json";
 import jaInvite from "./ja/invite.json";
@@ -129,6 +134,7 @@ import frAuth from "./fr/auth.json";
 import frSettings from "./fr/settings.json";
 import frIssues from "./fr/issues.json";
 import frAgents from "./fr/agents.json";
+import frLocalRuns from "./fr/local_runs.json";
 import frEditor from "./fr/editor.json";
 import frOnboarding from "./fr/onboarding.json";
 import frInvite from "./fr/invite.json";
@@ -154,6 +160,7 @@ import esAuth from "./es/auth.json";
 import esSettings from "./es/settings.json";
 import esIssues from "./es/issues.json";
 import esAgents from "./es/agents.json";
+import esLocalRuns from "./es/local_runs.json";
 import esEditor from "./es/editor.json";
 import esOnboarding from "./es/onboarding.json";
 import esInvite from "./es/invite.json";
@@ -185,6 +192,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: enSettings,
     issues: enIssues,
     agents: enAgents,
+    local_runs: enLocalRuns,
     editor: enEditor,
     onboarding: enOnboarding,
     invite: enInvite,
@@ -212,6 +220,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: zhHansSettings,
     issues: zhHansIssues,
     agents: zhHansAgents,
+    local_runs: zhHansLocalRuns,
     editor: zhHansEditor,
     onboarding: zhHansOnboarding,
     invite: zhHansInvite,
@@ -239,6 +248,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: zhHantSettings,
     issues: zhHantIssues,
     agents: zhHantAgents,
+    local_runs: zhHantLocalRuns,
     editor: zhHantEditor,
     onboarding: zhHantOnboarding,
     invite: zhHantInvite,
@@ -266,6 +276,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: koSettings,
     issues: koIssues,
     agents: koAgents,
+    local_runs: koLocalRuns,
     editor: koEditor,
     onboarding: koOnboarding,
     invite: koInvite,
@@ -293,6 +304,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: jaSettings,
     issues: jaIssues,
     agents: jaAgents,
+    local_runs: jaLocalRuns,
     editor: jaEditor,
     onboarding: jaOnboarding,
     invite: jaInvite,
@@ -320,6 +332,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: frSettings,
     issues: frIssues,
     agents: frAgents,
+    local_runs: frLocalRuns,
     editor: frEditor,
     onboarding: frOnboarding,
     invite: frInvite,
@@ -347,6 +360,7 @@ export const RESOURCES: Record<SupportedLocale, LocaleResources> = {
     settings: esSettings,
     issues: esIssues,
     agents: esAgents,
+    local_runs: esLocalRuns,
     editor: esEditor,
     onboarding: esOnboarding,
     invite: esInvite,

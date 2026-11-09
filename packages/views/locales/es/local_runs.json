@@ -1,0 +1,36 @@
+{
+  "board": {
+    "new_run": "Nueva ejecución",
+    "empty": "Todavía nada",
+    "untitled": "Sin título",
+    "desktop_only": "Las ejecuciones locales necesitan la app de escritorio: el navegador no tiene máquina.",
+    "title_label": "Título de la ejecución",
+    "title_placeholder": "¿Qué debe hacer el agente?",
+    "agent_label": "Agente",
+    "agent_placeholder": "Elegir un agente",
+    "command_label": "Programa",
+    "cwd_label": "Carpeta",
+    "cwd_placeholder": "Carpeta personal",
+    "body_label": "Prompt",
+    "body_placeholder": "Describe la tarea de esta ejecución.",
+    "run": "Ejecutar",
+    "stop": "Detener",
+    "publish": "Publicar en el tablero",
+    "published": "Publicado",
+    "remove": "Eliminar ejecución",
+    "output_label": "Salida",
+    "output_empty": "La salida aparecerá aquí al iniciar.",
+    "select_hint": "Elige una ejecución o crea una."
+  },
+  "status": {
+    "draft": "Borrador",
+    "running": "En curso",
+    "done": "Hecho",
+    "failed": "Falló",
+    "stopped": "Detenido"
+  },
+  "page": {
+    "title": "Ejecuciones locales",
+    "description": "Ejecuciones que solo ocurren en esta máquina. Nada llega al espacio de trabajo hasta que lo publiques."
+  }
+}

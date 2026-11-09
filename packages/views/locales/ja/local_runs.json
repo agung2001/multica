@@ -1,0 +1,36 @@
+{
+  "board": {
+    "new_run": "新しい実行",
+    "empty": "まだありません",
+    "untitled": "無題",
+    "desktop_only": "ローカル実行にはデスクトップアプリが必要です。ブラウザには実行するマシンがありません。",
+    "title_label": "実行のタイトル",
+    "title_placeholder": "エージェントに何をさせますか？",
+    "agent_label": "エージェント",
+    "agent_placeholder": "エージェントを選択",
+    "command_label": "プログラム",
+    "cwd_label": "フォルダ",
+    "cwd_placeholder": "ホームフォルダ",
+    "body_label": "プロンプト",
+    "body_placeholder": "この実行のタスクを説明してください。",
+    "run": "実行",
+    "stop": "停止",
+    "publish": "ボードに公開",
+    "published": "公開済み",
+    "remove": "実行を削除",
+    "output_label": "出力",
+    "output_empty": "実行が始まるとここに出力が表示されます。",
+    "select_hint": "実行を選択するか、新規作成してください。"
+  },
+  "status": {
+    "draft": "下書き",
+    "running": "実行中",
+    "done": "完了",
+    "failed": "失敗",
+    "stopped": "停止"
+  },
+  "page": {
+    "title": "ローカル実行",
+    "description": "このマシンだけで実行されます。公開するまでワークスペースには送られません。"
+  }
+}

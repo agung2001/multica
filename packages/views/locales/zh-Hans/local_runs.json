@@ -1,0 +1,36 @@
+{
+  "board": {
+    "new_run": "新建运行",
+    "empty": "暂无内容",
+    "untitled": "未命名",
+    "desktop_only": "本地运行需要桌面应用——浏览器没有可执行的机器。",
+    "title_label": "运行标题",
+    "title_placeholder": "要让智能体做什么？",
+    "agent_label": "智能体",
+    "agent_placeholder": "选择智能体",
+    "command_label": "程序",
+    "cwd_label": "目录",
+    "cwd_placeholder": "主目录",
+    "body_label": "提示词",
+    "body_placeholder": "描述本次运行的任务。",
+    "run": "运行",
+    "stop": "停止",
+    "publish": "发布到看板",
+    "published": "已发布",
+    "remove": "删除运行",
+    "output_label": "输出",
+    "output_empty": "运行开始后，输出会显示在这里。",
+    "select_hint": "选择一个运行，或新建一个。"
+  },
+  "status": {
+    "draft": "草稿",
+    "running": "运行中",
+    "done": "完成",
+    "failed": "失败",
+    "stopped": "已停止"
+  },
+  "page": {
+    "title": "本地运行",
+    "description": "只在本机执行。在你发布之前，这里的内容不会进入工作区。"
+  }
+}

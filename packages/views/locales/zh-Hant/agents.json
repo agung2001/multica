@@ -204,8 +204,7 @@
     "cancel": "取消",
     "run_on_my_machine": "在我的機器上執行",
     "run_on_my_machine_row": "在我的機器上執行",
-    "run_on_owner_default": "預設（擁有者機器）",
-    "runtime_owner_overridden_hint": "擁有者的機器。目前由你的機器執行該智能體。"
+    "run_on_my_machine_off": "不在本機執行"
   },
   "overview": {
     "attention_title": "需要處理的執行",

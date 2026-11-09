@@ -20,6 +20,15 @@ import {
   type IssueWindowRequest,
 } from "../shared/issue-window";
 import { AUTH_SESSION_STATE_CHANNEL } from "../shared/auth-session";
+import {
+  LOCAL_RUN_EXIT_CHANNEL,
+  LOCAL_RUN_OUTPUT_CHANNEL,
+  LOCAL_RUN_START_CHANNEL,
+  LOCAL_RUN_STOP_CHANNEL,
+  type LocalRunExitResult,
+  type LocalRunStartRequest,
+  type LocalRunStartResult,
+} from "../shared/local-run";
 import type {
   DaemonStatus,
   LocalRuntimeProbe,
@@ -381,9 +390,33 @@ const updaterAPI = {
 };
 
 if (process.contextIsolated) {
+
+/**
+ * Runs an agent program for the private local board. Streams stdout/stderr back
+ * as text and reports the exit; nothing here talks to the server.
+ */
+const localRunAPI = {
+  start: (request: LocalRunStartRequest): Promise<LocalRunStartResult> =>
+    ipcRenderer.invoke(LOCAL_RUN_START_CHANNEL, request),
+  stop: (runId: string): Promise<void> =>
+    ipcRenderer.invoke(LOCAL_RUN_STOP_CHANNEL, runId),
+  onOutput: (callback: (runId: string, chunk: string) => void) => {
+    const handler = (_: unknown, runId: string, chunk: string) => callback(runId, chunk);
+    ipcRenderer.on(LOCAL_RUN_OUTPUT_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(LOCAL_RUN_OUTPUT_CHANNEL, handler);
+  },
+  onExit: (callback: (runId: string, result: LocalRunExitResult) => void) => {
+    const handler = (_: unknown, runId: string, result: LocalRunExitResult) =>
+      callback(runId, result);
+    ipcRenderer.on(LOCAL_RUN_EXIT_CHANNEL, handler);
+    return () => ipcRenderer.removeListener(LOCAL_RUN_EXIT_CHANNEL, handler);
+  },
+};
+
   contextBridge.exposeInMainWorld("electron", electronAPI);
   contextBridge.exposeInMainWorld("desktopAPI", desktopAPI);
   contextBridge.exposeInMainWorld("daemonAPI", daemonAPI);
+  contextBridge.exposeInMainWorld("localRunAPI", localRunAPI);
   contextBridge.exposeInMainWorld("updater", updaterAPI);
 } else {
   // @ts-expect-error - fallback for non-isolated context

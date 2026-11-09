@@ -213,8 +213,7 @@
     "cancel": "Cancel",
     "run_on_my_machine": "Run on my machine",
     "run_on_my_machine_row": "Run on my machine",
-    "run_on_owner_default": "Default (owner's machine)",
-    "runtime_owner_overridden_hint": "The owner's machine. Your machine runs this agent right now."
+    "run_on_my_machine_off": "Not on this machine"
   },
   "overview": {
     "attention_title": "Runs need attention",

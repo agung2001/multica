@@ -7,7 +7,10 @@ import {
   providerDisplayName,
   runtimeDisplayName,
 } from "@multica/core/runtimes";
-import { useAgentOwnerRuntimeStore } from "@multica/core/agents";
+import {
+  bindingForRuntime,
+  useLocalRunsStore,
+} from "@multica/core/local-runs";
 import { Monitor } from "@multica/ui/icons";
 import {
   Select,
@@ -19,8 +22,8 @@ import {
 import { ProviderLogo } from "../../../runtimes/components/provider-logo";
 import { useT } from "../../../i18n";
 
-// Base UI treats "" as "no selection", so the owner's default needs a sentinel.
-export const OWNER_DEFAULT = "__owner_default__";
+// Base UI treats "" as "no selection", so "not on this machine" needs a sentinel.
+export const NOT_LOCAL = "__not_local__";
 
 type RunOnMyMachineProps = {
   agent: Agent;
@@ -30,21 +33,19 @@ type RunOnMyMachineProps = {
   /**
    * daemon_id of the desktop app's own daemon. Only runtimes registered under
    * it count as "this machine" — a person's other machines are deliberately
-   * invisible here, because this row answers one question: run it here, or
-   * leave it to the owner.
+   * invisible here, because this row answers one question: which agent CLI of
+   * this machine should run this agent when I run it myself.
    */
   localDaemonId: string | null;
-  /** Binds the agent. Clearing defaults lives in useExecutionControls. */
-  onBind: (runtimeId: string) => void;
 };
 
 /**
- * "Run on my machine": execute this agent locally, or leave it to the owner.
+ * "Run on my machine": which agent CLI on this laptop runs this agent.
  *
- * An agent has a single runtime, so both choices write the same `runtime_id`
- * the Runtime row above shows. This row exists to name the two intentions —
- * *here, on an agent CLI I have installed* versus *whatever the owner set up* —
- * instead of making people map "Pi · ubuntu" back to whose machine that is.
+ * This is a private preference stored on the device. It never writes to the
+ * agent — the owner's runtime stays exactly as they configured it — because the
+ * server routes every run to the agent's runtime and only the task pipeline can
+ * change that. Local runs live on the local board instead.
  */
 export function RunOnMyMachine({
   agent,
@@ -52,16 +53,14 @@ export function RunOnMyMachine({
   currentUserId,
   canEdit,
   localDaemonId,
-  onBind,
 }: RunOnMyMachineProps) {
   const { t } = useT("agents");
-  const rememberedOwnerRuntimeId = useAgentOwnerRuntimeStore(
-    (state) => state.entries[agent.id] ?? null,
-  );
-  const rememberOwnerRuntime = useAgentOwnerRuntimeStore((state) => state.remember);
+  const binding = useLocalRunsStore((state) => state.bindings[agent.id] ?? null);
+  const bindAgent = useLocalRunsStore((state) => state.bindAgent);
+  const unbindAgent = useLocalRunsStore((state) => state.unbindAgent);
 
-  // Agents installed on this machine. Excludes cloud workers (they are not
-  // local execution) and anything the server would refuse to bind.
+  // Agent CLIs installed on this machine. Cloud workers are not local
+  // execution, and another member's private runtime is not ours to run.
   const localRuntimes = useMemo(() => {
     if (!localDaemonId) return [];
     return runtimes.filter(
@@ -72,71 +71,35 @@ export function RunOnMyMachine({
     );
   }, [currentUserId, localDaemonId, runtimes]);
 
-  // Where "leave it to the owner" goes back to: the binding this device
-  // replaced when we still know it, otherwise the owner's best runtime. The
-  // remembered value is what keeps a machine with several agent CLIs from
-  // silently switching CLI on the way back.
-  const ownerRuntime = useMemo(
-    () => resolveOwnerRuntime(agent, runtimes, currentUserId, rememberedOwnerRuntimeId),
-    [agent, currentUserId, rememberedOwnerRuntimeId, runtimes],
-  );
-
   if (!canEdit || localRuntimes.length === 0) return null;
 
-  const boundLocally = localRuntimes.find((runtime) => runtime.id === agent.runtime_id) ?? null;
-  const value = boundLocally ? boundLocally.id : OWNER_DEFAULT;
-  const defaultLabel = t(($) => $.inspector.run_on_owner_default);
+  const bound = localRuntimes.find((runtime) => runtime.id === binding?.runtimeId) ?? null;
+  const offLabel = t(($) => $.inspector.run_on_my_machine_off);
 
-  const select = (next: string | null) => {
-    if (!next || next === value) return;
-    if (next === OWNER_DEFAULT) {
-      // Nothing to restore to means the option should not have been offered;
-      // keep the current binding rather than clearing it.
-      if (ownerRuntime) onBind(ownerRuntime.id);
+  const choose = (next: string | null) => {
+    if (!next) return;
+    if (next === NOT_LOCAL) {
+      unbindAgent(agent.id);
       return;
     }
-    // Remember what we are about to overwrite, so the Runtime row has something
-    // of the owner's to show and "Default" has an exact binding to go back to.
-    //
-    // Only while no override is in progress: switching from one CLI here to
-    // another is the same override continuing, and the remembered value is
-    // already the owner's. Remembering the CLI we are leaving — which happens
-    // whenever the person clicking also owns the agent — made this row rewrite
-    // the owner's configuration with the previous local choice, so the Runtime
-    // row appeared to change on its own a beat later.
-    const current = runtimes.find((runtime) => runtime.id === agent.runtime_id);
-    const overrideInProgress =
-      rememberedOwnerRuntimeId !== null &&
-      current !== undefined &&
-      current.daemon_id === localDaemonId;
-    if (current && !overrideInProgress) {
-      rememberOwnerRuntime(agent.id, current.id);
-    }
-    onBind(next);
+    const runtime = localRuntimes.find((entry) => entry.id === next);
+    if (runtime) bindAgent(agent.id, bindingForRuntime(runtime));
   };
 
   const items = [
-    { value: OWNER_DEFAULT, label: defaultLabel },
+    { value: NOT_LOCAL, label: offLabel },
     ...localRuntimes.map((runtime) => ({ value: runtime.id, label: agentLabel(runtime) })),
   ];
 
   return (
-    <Select
-      items={items}
-      value={value}
-      onValueChange={select}
-    >
-      {/* Full width of the control column, like the Runtime picker above it:
-          the trigger defaults to w-fit, which made this row look like a chip. */}
+    <Select items={items} value={bound?.id ?? NOT_LOCAL} onValueChange={choose}>
+      {/* Full width of the control column, like the Runtime picker above it. */}
       <SelectTrigger className="w-full" aria-label={t(($) => $.inspector.run_on_my_machine)}>
         <SelectValue>
           {() => (
             <span className="flex min-w-0 flex-1 items-center gap-2">
-              {boundLocally ? (
-                <ProviderLogo
-                  provider={boundLocally.provider}
-                  className="h-3.5 w-3.5 shrink-0"
-                />
+              {bound ? (
+                <ProviderLogo provider={bound.provider} className="h-3.5 w-3.5 shrink-0" />
               ) : (
                 <Monitor
                   className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -144,9 +107,9 @@ export function RunOnMyMachine({
                 />
               )}
               <span className="min-w-0 flex-1 truncate">
-                {boundLocally ? agentLabel(boundLocally) : defaultLabel}
+                {bound ? agentLabel(bound) : offLabel}
               </span>
-              {boundLocally ? <StatusDot runtime={boundLocally} /> : null}
+              {bound ? <StatusDot runtime={bound} /> : null}
             </span>
           )}
         </SelectValue>
@@ -194,108 +157,11 @@ function StatusDot({ runtime }: { runtime: AgentRuntime }) {
   );
 }
 
-/**
- * The runtime the Runtime row should display while this device overrides the
- * agent, or null when no override is active.
- *
- * Moving an agent to this laptop writes the same `runtime_id` the Runtime row
- * reads, which would otherwise erase every trace of what the owner configured.
- * While the override is active the row keeps showing the owner's runtime
- * (remembered, see useAgentOwnerRuntimeStore) and the "Run on my machine" row
- * shows where the work actually runs, so the two rows answer two different
- * questions instead of echoing each other.
- *
- * The remembered binding is whatever the agent was on before this device moved
- * it, which is not necessarily a runtime the owner registered: an agent can be
- * bound to a teammate's shared runtime. Requiring the remembered runtime to
- * belong to the agent's owner hid exactly those overrides, leaving the row to
- * fall back to the effective binding and appear to change by itself.
- */
-export function ownerConfiguredRuntimeId(
-  agent: Agent,
-  runtimes: AgentRuntime[],
-  localDaemonId: string | null,
-  rememberedRuntimeId: string | null,
-): string | null {
-  if (!localDaemonId || !rememberedRuntimeId) return null;
-  const effective = runtimes.find((runtime) => runtime.id === agent.runtime_id);
-  if (!effective || effective.daemon_id !== localDaemonId) return null;
-  const remembered = runtimes.find((runtime) => runtime.id === rememberedRuntimeId);
-  if (!remembered || remembered.id === effective.id) return null;
-  return remembered.id;
-}
-
 /** The agent CLI's own name, which is what a person recognises on their laptop. */
-function agentLabel(runtime: AgentRuntime): string {
+export function agentLabel(runtime: AgentRuntime): string {
   const custom = runtime.custom_name?.trim();
   if (custom) return custom;
   const provider = runtime.provider?.trim();
   if (provider) return providerDisplayName(provider);
   return runtimeDisplayName(runtime);
-}
-
-/**
- * Where "Default (owner's machine)" points.
- *
- * The remembered binding wins — it is the runtime the agent actually had before
- * this device changed it. Only when there is nothing to remember (first visit,
- * a different machine, or an entry that no longer qualifies) does it fall back
- * to picking one of the owner's runtimes, which cannot know which agent CLI of
- * theirs the agent was on.
- *
- * Ownership is deliberately not part of the check: a shared runtime owned by a
- * teammate is a legitimate thing for an agent to have been bound to. What
- * matters is that the runtime still exists and that this person may bind it,
- * which is what the server enforces too.
- */
-export function resolveOwnerRuntime(
-  agent: Agent,
-  runtimes: AgentRuntime[],
-  currentUserId: string | null,
-  rememberedRuntimeId: string | null,
-): AgentRuntime | null {
-  const ownerId = agent.owner_id;
-  if (!ownerId) return null;
-
-  if (rememberedRuntimeId) {
-    const remembered = runtimes.find((runtime) => runtime.id === rememberedRuntimeId);
-    if (remembered && isRuntimeUsableForUser(remembered, currentUserId)) {
-      return remembered;
-    }
-  }
-  return ownerDefaultRuntime(agent, runtimes, currentUserId);
-}
-
-/**
- * Fallback owner runtime: prefer an online one, then the most recently active.
- *
- * Only used when there is no remembered binding, so the arbitrary-looking
- * ordering never overrides a known answer.
- */
-export function ownerDefaultRuntime(
-  agent: Agent,
-  runtimes: AgentRuntime[],
-  currentUserId: string | null,
-): AgentRuntime | null {
-  const ownerId = agent.owner_id;
-  if (!ownerId) return null;
-  const owned = runtimes.filter(
-    (runtime) =>
-      runtime.owner_id === ownerId && isRuntimeUsableForUser(runtime, currentUserId),
-  );
-  if (owned.length === 0) return null;
-  return [...owned].sort(compareByActivity)[0] ?? null;
-}
-
-function activityOf(runtime: AgentRuntime): number {
-  const stamp = runtime.last_seen_at ?? runtime.updated_at ?? runtime.created_at;
-  const parsed = Date.parse(stamp);
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
-function compareByActivity(left: AgentRuntime, right: AgentRuntime): number {
-  const onlineDelta =
-    Number(right.status === "online") - Number(left.status === "online");
-  if (onlineDelta !== 0) return onlineDelta;
-  return activityOf(right) - activityOf(left);
 }

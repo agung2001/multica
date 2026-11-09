@@ -20,6 +20,7 @@ import {
   setupDaemonManager,
 } from "./daemon-manager";
 import { setupLocalDirectory } from "./local-directory";
+import { registerLocalRun, stopAllLocalRuns } from "./local-run";
 import { configureLinuxFileDialogs } from "./linux-file-dialog";
 import { openExternalSafely, downloadURLSafely } from "./external-url";
 import { installContextMenu } from "./context-menu";
@@ -783,6 +784,10 @@ if (!gotTheLock) {
       optimizer.watchWindowShortcuts(window);
     });
 
+    // Batch runs on the private local board. Renderer-driven, device-only,
+    // and independent of the daemon (which only carries server tasks).
+    registerLocalRun();
+
     // IPC: open URL in default browser (used by renderer for Google login).
     // All scheme-allowlist enforcement lives in openExternalSafely — this
     // is the single audit point for renderer-controlled URLs reaching the
@@ -1058,6 +1063,10 @@ if (!gotTheLock) {
     // Registered after the updater and daemon gates, so a quit they hold
     // (busy daemon, pending install) leaves the session writable; only the
     // quit that actually proceeds freezes it.
+    app.on("will-quit", () => {
+      stopAllLocalRuns();
+    });
+
     app.on("before-quit", (event) => {
       if (event.defaultPrevented) return;
       freezeWindowSession();

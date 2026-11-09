@@ -213,8 +213,7 @@
     "cancel": "Annuler",
     "run_on_my_machine": "Exécuter sur ma machine",
     "run_on_my_machine_row": "Exécuter sur ma machine",
-    "run_on_owner_default": "Par défaut (machine du propriétaire)",
-    "runtime_owner_overridden_hint": "La machine du propriétaire. Votre machine exécute cet agent actuellement."
+    "run_on_my_machine_off": "Pas sur cette machine"
   },
   "overview": {
     "attention_title": "Des exécutions demandent votre attention",

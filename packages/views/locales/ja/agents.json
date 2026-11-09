@@ -196,8 +196,7 @@
     "cancel": "キャンセル",
     "run_on_my_machine": "自分のマシンで実行",
     "run_on_my_machine_row": "自分のマシンで実行",
-    "run_on_owner_default": "既定（所有者のマシン）",
-    "runtime_owner_overridden_hint": "所有者のマシン。現在は自分のマシンで実行されています。"
+    "run_on_my_machine_off": "このマシンでは実行しない"
   },
   "overview": {
     "attention_title": "対応が必要な実行",

@@ -213,8 +213,7 @@
     "qoder_execution_note": "El modelo, las herramientas y las skills se configuran en el agente desde Qoder Cloud Agents.",
     "run_on_my_machine": "Ejecutar en mi máquina",
     "run_on_my_machine_row": "Ejecutar en mi máquina",
-    "run_on_owner_default": "Predeterminado (máquina del propietario)",
-    "runtime_owner_overridden_hint": "La máquina del propietario. Ahora mismo tu máquina ejecuta este agente."
+    "run_on_my_machine_off": "No en esta máquina"
   },
   "overview": {
     "attention_title": "Ejecuciones que requieren atención",

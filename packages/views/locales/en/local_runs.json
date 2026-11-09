@@ -1,0 +1,36 @@
+{
+  "board": {
+    "new_run": "New run",
+    "empty": "Nothing here yet",
+    "untitled": "Untitled",
+    "desktop_only": "Local runs need the desktop app — the browser has no machine to run on.",
+    "title_label": "Run title",
+    "title_placeholder": "What should the agent do?",
+    "agent_label": "Agent",
+    "agent_placeholder": "Choose an agent",
+    "command_label": "Program",
+    "cwd_label": "Folder",
+    "cwd_placeholder": "Home folder",
+    "body_label": "Prompt",
+    "body_placeholder": "Describe the task for this run.",
+    "run": "Run",
+    "stop": "Stop",
+    "publish": "Publish to board",
+    "published": "Published",
+    "remove": "Delete run",
+    "output_label": "Output",
+    "output_empty": "Output appears here once the run starts.",
+    "select_hint": "Pick a run, or create one."
+  },
+  "status": {
+    "draft": "Draft",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed",
+    "stopped": "Stopped"
+  },
+  "page": {
+    "title": "Local runs",
+    "description": "Runs that happen only on this machine. Nothing here reaches the workspace until you publish it."
+  }
+}

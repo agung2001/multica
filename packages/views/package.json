@@ -27,6 +27,7 @@
     "./my-issues": "./my-issues/index.ts",
     "./skills": "./skills/index.ts",
     "./agents": "./agents/index.ts",
+    "./local-runs": "./local-runs/index.ts",
     "./agents/agent-detail-page": "./agents/components/agent-detail-page.tsx",
     "./agents/agents-page": "./agents/components/agents-page.tsx",
     "./agents/ai-builder-session-page": "./agents/create/ai-builder-session-page.tsx",
