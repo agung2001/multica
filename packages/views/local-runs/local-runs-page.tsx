@@ -47,7 +47,12 @@ export function LocalRunsPage() {
     () =>
       agents
         .filter((agent) => !agent.archived_at)
-        .map((agent) => ({ id: agent.id, name: agent.name, programs })),
+        .map((agent) => ({
+          id: agent.id,
+          name: agent.name,
+          instructions: agent.instructions ?? "",
+          programs,
+        })),
     [agents, programs],
   );
 

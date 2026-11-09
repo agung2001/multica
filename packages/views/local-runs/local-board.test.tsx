@@ -11,6 +11,7 @@ const agents: LocalBoardAgent[] = [
   {
     id: "agent-1",
     name: "Reviewer",
+    instructions: "You are the reviewer.",
     programs: [{ runtimeId: "rt-pi", label: "Pi", command: "pi -p --mode json" }],
   },
 ];
@@ -19,7 +20,9 @@ const agents: LocalBoardAgent[] = [
 function installRunner() {
   const listeners = { output: [] as ((id: string, chunk: string) => void)[], exit: [] as ((id: string, result: { code: number | null; error?: string }) => void)[] };
   const api = {
-    start: vi.fn(async () => ({ runId: "r1" })),
+    start: vi.fn(async (_input: { argv: string[]; cwd: string; prompt: string }) => ({
+      runId: "r1",
+    })),
     stop: vi.fn(),
     onOutput: (cb: (id: string, chunk: string) => void) => {
       listeners.output.push(cb);
@@ -92,18 +95,19 @@ describe("LocalBoard", () => {
     await user.click(screen.getByRole("button", { name: "Run" }));
 
     await waitFor(() => expect(runner.api.start).toHaveBeenCalled());
-    expect(runner.api.start.mock.calls[0][0]).toMatchObject({
+    const started = runner.api.start.mock.calls[0]?.[0];
+    expect(started).toMatchObject({
       argv: ["pi", "-p", "--mode", "json"],
       cwd: "/tmp",
-      prompt: "Explain the import flow",
+      prompt: "You are the reviewer.\n\nExplain the import flow",
     });
-    expect(useLocalRunsStore.getState().runs[0].status).toBe("running");
+    expect(useLocalRunsStore.getState().runs[0]?.status).toBe("running");
 
     runner.emitOutput("working…");
-    await waitFor(() => expect(useLocalRunsStore.getState().runs[0].output).toBe("working…"));
+    await waitFor(() => expect(useLocalRunsStore.getState().runs[0]?.output).toBe("working…"));
 
     runner.emitExit(0);
-    await waitFor(() => expect(useLocalRunsStore.getState().runs[0].status).toBe("done"));
+    await waitFor(() => expect(useLocalRunsStore.getState().runs[0]?.status).toBe("done"));
   });
 
   it("marks a run that could not start as failed and keeps the reason", async () => {
@@ -117,8 +121,8 @@ describe("LocalBoard", () => {
 
     runner.emitExit(null, "spawn pi ENOENT");
 
-    await waitFor(() => expect(useLocalRunsStore.getState().runs[0].status).toBe("failed"));
-    expect(useLocalRunsStore.getState().runs[0].output).toContain("spawn pi ENOENT");
+    await waitFor(() => expect(useLocalRunsStore.getState().runs[0]?.status).toBe("failed"));
+    expect(useLocalRunsStore.getState().runs[0]?.output).toContain("spawn pi ENOENT");
   });
 
   it("publishes through the host and remembers the issue", async () => {
@@ -131,7 +135,7 @@ describe("LocalBoard", () => {
 
     expect(onPublish).toHaveBeenCalled();
     await waitFor(() =>
-      expect(useLocalRunsStore.getState().runs[0].publishedIssueId).toBe("issue-9"),
+      expect(useLocalRunsStore.getState().runs[0]?.publishedIssueId).toBe("issue-9"),
     );
   });
 });

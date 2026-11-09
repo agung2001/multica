@@ -17,6 +17,8 @@ import { useT } from "../i18n";
 export type LocalBoardAgent = {
   id: string;
   name: string;
+  /** The agent's own instructions, prepended to every prompt it runs here. */
+  instructions?: string;
   /** Agent CLIs of this machine that could run this agent. */
   programs: { runtimeId: string; label: string; command: string }[];
 };
@@ -78,10 +80,15 @@ export function LocalBoard({ agents, onPublish, className }: LocalBoardProps) {
     const runId = selected.id;
     clearOutput(runId);
     setStatus(runId, "running");
+    const agent = agents.find((entry) => entry.id === selected.agentId) ?? null;
     const handle = runner.start({
       argv,
       cwd: selected.cwd,
-      prompt: selected.body,
+      // The agent's configured instructions travel with the prompt: this run
+      // borrows the agent, it does not reimplement it.
+      prompt: [agent?.instructions?.trim(), selected.body.trim()]
+        .filter(Boolean)
+        .join("\n\n"),
       onOutput: (chunk) => appendOutput(runId, chunk),
       onExit: (result) => {
         stopRef.current = null;
