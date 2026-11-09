@@ -19,8 +19,18 @@ export interface LocalIssue {
   agentId: string;
   command: string;
   cwd: string;
-  runStatus: LocalRunStatus;
+  /** Every exchange with the agent, oldest first. */
+  turns: LocalIssueTurn[];
+}
+
+/** One prompt/answer round of a local run, kept beside the issue. */
+export interface LocalIssueTurn {
+  id: string;
+  prompt: string;
   output: string;
+  status: LocalRunStatus;
+  error: string | null;
+  createdAt: string;
 }
 
 export type LocalRunStatus = "draft" | "running" | "done" | "failed" | "stopped";
@@ -44,10 +54,13 @@ interface LocalIssuesState {
   update: (id: string, patch: Partial<Issue>) => void;
   updateRun: (id: string, patch: Partial<Pick<LocalIssue, "command" | "cwd">>) => void;
   remove: (id: string) => void;
-  setRunStatus: (id: string, status: LocalRunStatus) => void;
-  appendOutput: (id: string, chunk: string) => void;
-  clearOutput: (id: string) => void;
+  /** Opens a round and returns its id. */
+  beginTurn: (id: string, prompt: string) => string;
+  appendTurnOutput: (id: string, turnId: string, chunk: string) => void;
+  endTurn: (id: string, turnId: string, status: LocalRunStatus, error?: string | null) => void;
 }
+
+const EMPTY_TURNS: LocalIssueTurn[] = [];
 
 export function localIssueId(): string {
   return `local-${crypto.randomUUID()}`;
@@ -94,8 +107,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
           agentId: input.agentId,
           command: input.command,
           cwd: input.cwd ?? "",
-          runStatus: "draft",
-          output: "",
+          turns: [],
         };
         set((state) => ({
           issues: [record, ...state.issues].slice(0, LOCAL_ISSUE_LIMIT),
@@ -118,30 +130,62 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         })),
       remove: (id) =>
         set((state) => ({ issues: state.issues.filter((entry) => entry.issue.id !== id) })),
-      setRunStatus: (id, status) =>
+      beginTurn: (id, prompt) => {
+        const turnId = `turn-${crypto.randomUUID()}`;
         set((state) => ({
           issues: state.issues.map((entry) =>
-            entry.issue.id === id ? { ...entry, runStatus: status } : entry,
+            entry.issue.id === id
+              ? {
+                  ...entry,
+                  turns: [
+                    ...entry.turns,
+                    {
+                      id: turnId,
+                      prompt,
+                      output: "",
+                      status: "running" as LocalRunStatus,
+                      error: null,
+                      createdAt: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : entry,
+          ),
+        }));
+        return turnId;
+      },
+      appendTurnOutput: (id, turnId, chunk) =>
+        set((state) => ({
+          issues: state.issues.map((entry) =>
+            entry.issue.id === id
+              ? {
+                  ...entry,
+                  turns: entry.turns.map((turn) => {
+                    if (turn.id !== turnId) return turn;
+                    const output = turn.output + chunk;
+                    return {
+                      ...turn,
+                      output:
+                        output.length > LOCAL_ISSUE_OUTPUT_LIMIT
+                          ? `…[earlier output dropped]\n${output.slice(-LOCAL_ISSUE_OUTPUT_LIMIT)}`
+                          : output,
+                    };
+                  }),
+                }
+              : entry,
           ),
         })),
-      appendOutput: (id, chunk) =>
-        set((state) => ({
-          issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
-            const output = entry.output + chunk;
-            return {
-              ...entry,
-              output:
-                output.length > LOCAL_ISSUE_OUTPUT_LIMIT
-                  ? `…[earlier output dropped]\n${output.slice(-LOCAL_ISSUE_OUTPUT_LIMIT)}`
-                  : output,
-            };
-          }),
-        })),
-      clearOutput: (id) =>
+      endTurn: (id, turnId, status, error = null) =>
         set((state) => ({
           issues: state.issues.map((entry) =>
-            entry.issue.id === id ? { ...entry, output: "" } : entry,
+            entry.issue.id === id
+              ? {
+                  ...entry,
+                  turns: entry.turns.map((turn) =>
+                    turn.id === turnId ? { ...turn, status, error } : turn,
+                  ),
+                }
+              : entry,
           ),
         })),
     }),
@@ -152,6 +196,12 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
 /** Every local issue in a workspace, already in the shape the board renders. */
 export function selectLocalIssues(issues: LocalIssue[], wsId: string): Issue[] {
   return issues.filter((entry) => entry.issue.workspace_id === wsId).map((entry) => entry.issue);
+}
+
+/** The turn in flight for an issue, if any. */
+export function activeLocalTurn(record: LocalIssue | null): LocalIssueTurn | null {
+  const turns = record?.turns ?? EMPTY_TURNS;
+  return turns.findLast((turn) => turn.status === "running") ?? null;
 }
 
 /** A local issue's record, or `null` when the id belongs to the server. */

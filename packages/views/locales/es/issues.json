@@ -1869,13 +1869,19 @@
     }
   },
   "local_run": {
-    "title": "Se ejecuta en esta máquina",
-    "idle": "Sin ejecutar",
+    "you": "Tú",
+    "agent_fallback": "Agente",
+    "draft": "Sin ejecutar",
     "running": "En curso",
     "done": "Terminado",
     "failed": "Fallido",
     "stopped": "Detenido",
+    "reply_placeholder": "Responde para continuar…",
+    "send": "Enviar",
+    "hint": "Enter para enviar",
     "run": "Ejecutar",
-    "stop": "Detener"
+    "stop": "Detener",
+    "title": "Se ejecuta en esta máquina",
+    "idle": "Sin ejecuciones todavía."
   }
 }

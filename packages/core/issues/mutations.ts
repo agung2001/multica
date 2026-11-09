@@ -28,6 +28,7 @@ import { issueChangedDims } from "./surface/membership";
 import { addIssueToBuckets } from "./cache-helpers";
 import { createLocalIssueIfBound } from "../local-issues/intercept";
 import { isLocalIssueId, localIssueRecord, useLocalIssuesStore } from "../local-issues/store";
+import { autoRunLocalIssue } from "../local-issues/run";
 import {
   cleanupDeletedIssueCaches,
   collectDeletedIssueCacheMetadata,
@@ -179,7 +180,11 @@ export function useCreateIssue() {
   // it would enqueue a task for a daemon that will never claim it.
   return useIssueCreateMutation((data: CreateIssueRequest) => {
     const local = createLocalIssueIfBound(wsId, data);
-    return local ? Promise.resolve(local) : api.createIssue(data);
+    if (!local) return api.createIssue(data);
+    // Assigning an agent to a normal issue starts work right away; a local
+    // issue does the same, just on this machine.
+    autoRunLocalIssue(local.id);
+    return Promise.resolve(local);
   });
 }
 

@@ -190,7 +190,8 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import { MetadataSection } from "./metadata-section";
 import { IssueSidebarSectionHeader, IssueSidebarStack, IssueSidebarPropertyGrid } from "./issue-sidebar-section";
 import { useT } from "../../i18n";
-import { LocalIssueRunner } from "./local-issue-runner";
+import { LocalIssueComposer, LocalIssueFeed } from "./local-issue-feed";
+import { isLocalIssueId } from "@multica/core/local-issues";
 import { useIssueDetailScrollRestore } from "../hooks/use-issue-detail-scroll-restore";
 import { useJumpToLatest } from "../hooks/use-jump-to-latest";
 import { useInPageFind } from "../hooks/use-in-page-find";
@@ -3613,8 +3614,6 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             />
           )}
 
-          <LocalIssueRunner issueId={id} wsId={wsId} />
-
           <div
             {...descDropZoneProps}
             {...descriptionAnnotations.captureProps}
@@ -3964,7 +3963,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 first commit. Without this null guard Virtuoso falls back to
                 its own scroller, grabs 0 height inside overflow-y-auto, and
                 miscomputes total-height on first paint. */}
-            {timelineLoading && timelineView.groups.length === 0 ? (
+            {isLocalIssueId(id) ? (
+              <LocalIssueFeed issueId={id} />
+            ) : timelineLoading && timelineView.groups.length === 0 ? (
               <TimelineSkeleton />
             ) : (
               // Two render modes:
@@ -4062,13 +4063,17 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             {stickyComposer && jumpToLatest.visible && (
               <JumpToLatestButton onClick={jumpToLatest.jump} label={t(($) => $.timeline.jump_to_latest)} />
             )}
-            <CommentInput
-              key={id}
-              issueId={id}
-              onSubmit={submitComment}
-              onAccepted={scrollToTimelineBottom}
-              onEditAnnotation={(annotationId) => descriptionAnnotations.editAnnotation(annotationId, true)}
-            />
+            {isLocalIssueId(id) ? (
+              <LocalIssueComposer issueId={id} />
+            ) : (
+              <CommentInput
+                key={id}
+                issueId={id}
+                onSubmit={submitComment}
+                onAccepted={scrollToTimelineBottom}
+                onEditAnnotation={(annotationId) => descriptionAnnotations.editAnnotation(annotationId, true)}
+              />
+            )}
           </div>
         </div>
         </div>

@@ -1800,13 +1800,19 @@
     }
   },
   "local_run": {
-    "title": "이 컴퓨터에서 실행",
-    "idle": "아직 실행 안 됨",
+    "you": "나",
+    "agent_fallback": "에이전트",
+    "draft": "아직 실행 안 됨",
     "running": "실행 중",
     "done": "완료",
     "failed": "실패",
     "stopped": "중지됨",
+    "reply_placeholder": "이어서 답장…",
+    "send": "보내기",
+    "hint": "Enter로 보내기",
     "run": "실행",
-    "stop": "중지"
+    "stop": "중지",
+    "title": "이 컴퓨터에서 실행",
+    "idle": "아직 실행 기록이 없습니다."
   }
 }

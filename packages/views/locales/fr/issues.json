@@ -1869,13 +1869,19 @@
     }
   },
   "local_run": {
-    "title": "Exécuté sur cette machine",
-    "idle": "Pas encore exécuté",
+    "you": "Vous",
+    "agent_fallback": "Agent",
+    "draft": "Pas encore exécuté",
     "running": "En cours",
     "done": "Terminé",
     "failed": "Échec",
     "stopped": "Arrêté",
+    "reply_placeholder": "Répondre pour continuer…",
+    "send": "Envoyer",
+    "hint": "Entrée pour envoyer",
     "run": "Exécuter",
-    "stop": "Arrêter"
+    "stop": "Arrêter",
+    "title": "Exécuté sur cette machine",
+    "idle": "Aucune exécution."
   }
 }
