@@ -1,6 +1,6 @@
 "use client";
 
-import { localRunRunner, splitCommandLine } from "../local-runs";
+import { createTranscriptFormatter, localRunRunner, splitCommandLine } from "../local-runs";
 import { localIssueRecord, useLocalIssuesStore } from "./store";
 
 /**
@@ -11,6 +11,8 @@ import { localIssueRecord, useLocalIssuesStore } from "./store";
  * about.
  */
 const stops = new Map<string, () => void>();
+/** Issues the user ended by hand, so a signal is not reported as a failure. */
+const stoppedByUser = new Set<string>();
 
 /**
  * Starts a round against the agent for this issue.
@@ -27,6 +29,8 @@ export function startLocalIssueRun(issueId: string, feedback?: string): boolean 
   const argv = splitCommandLine(record.command);
   if (argv.length === 0) return false;
 
+  // What the CLI receives repeats the issue each time (every launch is a new
+  // process); what the feed shows is the line the person actually wrote.
   const prompt = [
     record.issue.title,
     record.issue.description?.trim(),
@@ -34,20 +38,35 @@ export function startLocalIssueRun(issueId: string, feedback?: string): boolean 
   ]
     .filter(Boolean)
     .join("\n\n");
+  const display = feedback?.trim() || record.issue.title;
 
   const store = useLocalIssuesStore.getState();
-  const turnId = store.beginTurn(issueId, prompt);
+  const turnId = store.beginTurn(issueId, display);
+  // Every CLI on the list streams protocol JSON; the formatter is what turns
+  // it into the conversation the run block shows.
+  const formatter = createTranscriptFormatter();
 
   const handle = runner.start({
     argv,
     cwd: record.cwd,
     prompt,
-    onOutput: (chunk) => useLocalIssuesStore.getState().appendTurnOutput(issueId, turnId, chunk),
+    onOutput: (chunk) => {
+      const text = formatter.write(chunk);
+      if (text) useLocalIssuesStore.getState().appendTurnOutput(issueId, turnId, text);
+    },
     onExit: (result) => {
       stops.delete(issueId);
+      const stopped = stoppedByUser.delete(issueId);
+      const tail = formatter.finish();
+      if (tail) useLocalIssuesStore.getState().appendTurnOutput(issueId, turnId, tail);
+      const status = stopped
+        ? "stopped"
+        : result.error || result.code !== 0
+          ? "failed"
+          : "done";
       useLocalIssuesStore
         .getState()
-        .endTurn(issueId, turnId, result.error || result.code !== 0 ? "failed" : "done", result.error ?? null);
+        .endTurn(issueId, turnId, status, stopped ? null : (result.error ?? null));
     },
   });
 
@@ -58,6 +77,7 @@ export function startLocalIssueRun(issueId: string, feedback?: string): boolean 
 export function stopLocalIssueRun(issueId: string): void {
   const stop = stops.get(issueId);
   if (!stop) return;
+  stoppedByUser.add(issueId);
   stop();
   stops.delete(issueId);
 }

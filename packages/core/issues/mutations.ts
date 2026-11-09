@@ -449,7 +449,15 @@ export function useDeleteIssue() {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
   return useMutation({
-    mutationFn: (id: string) => api.deleteIssue(id),
+    mutationFn: (id: string) => {
+      // A local issue is not on the server, so deleting it is a local removal;
+      // asking the API would answer "issue not found".
+      if (isLocalIssueId(id)) {
+        useLocalIssuesStore.getState().remove(id);
+        return Promise.resolve();
+      }
+      return api.deleteIssue(id);
+    },
     onMutate: async (id) => {
       await Promise.all([
         qc.cancelQueries({ queryKey: issueKeys.list(wsId) }),

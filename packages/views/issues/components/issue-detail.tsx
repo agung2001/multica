@@ -1396,6 +1396,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
 
   // Issue navigation — read from TQ list cache
   const wsId = useWorkspaceId();
+  // A local issue lives in this device's storage: anything the sidebar loads
+  // from the server for it will only fail.
+  const isLocal = isLocalIssueId(issueId);
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   // Workspace owners and admins moderate any comment authored by anyone
@@ -3088,15 +3091,21 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
         </IssueSidebarPropertyGrid>}
       </div>
 
-      <QuickActionsSection issueId={issue.id} />
+      {!isLocal && <QuickActionsSection issueId={issue.id} />}
 
-      <WakeupsSection
-        issueId={issue.id}
-        closed={["done", "closed"].includes(resolveStatusCategory(issue.status))}
-        defaultAgentId={issue.assignee_type === "agent" ? (issue.assignee_id ?? undefined) : undefined}
-      />
+      {/* Wakeups and plugins read server-only projections; a local issue has no
+          server row, so these would only ever say "could not load". */}
+      {!isLocal && (
+        <>
+          <WakeupsSection
+            issueId={issue.id}
+            closed={["done", "closed"].includes(resolveStatusCategory(issue.status))}
+            defaultAgentId={issue.assignee_type === "agent" ? (issue.assignee_id ?? undefined) : undefined}
+          />
 
-      <PluginPanelSection issueId={issue.id} />
+          <PluginPanelSection issueId={issue.id} />
+        </>
+      )}
 
       {/* Parent issue — standalone section, only when the issue has a
           parent. Setting a parent is reachable via the issue actions menu;
@@ -3128,12 +3137,12 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
         </div>
       )}
 
-      <IssueDuplicatesSection issueId={issue.id} />
+      {!isLocal && <IssueDuplicatesSection issueId={issue.id} />}
 
       {/* Pull requests — hidden when the workspace disables the PR sidebar
           (or the GitHub master switch is off). Backend data is kept either
           way so re-enabling restores the section instantly. */}
-      {githubSettings.prSidebar && (
+      {githubSettings.prSidebar && !isLocal && (
         <PullRequestsSection
           issueId={id}
           identifier={issue.identifier}

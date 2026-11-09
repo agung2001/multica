@@ -189,7 +189,44 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
           ),
         })),
     }),
-    { name: "multica_local_issues", version: 1, storage: createJSONStorage(() => defaultStorage) },
+    {
+      name: "multica_local_issues",
+      version: 2,
+      storage: createJSONStorage(() => defaultStorage),
+      // v1 kept one transcript per issue (`runStatus` + `output`). It becomes a
+      // single turn so the issue keeps what it already ran instead of showing
+      // up empty and unrunnable.
+      migrate: (persisted, version) => {
+        const state = persisted as { issues?: unknown[] } | undefined;
+        if (version >= 2 || !Array.isArray(state?.issues)) return state as LocalIssuesState;
+        return {
+          ...state,
+          issues: state.issues.map((raw) => {
+            const entry = raw as LocalIssue & {
+              runStatus?: LocalRunStatus;
+              output?: string;
+            };
+            if (Array.isArray(entry.turns)) return entry;
+            const { runStatus, output, ...rest } = entry;
+            return {
+              ...rest,
+              turns: output
+                ? [
+                    {
+                      id: `turn-${crypto.randomUUID()}`,
+                      prompt: entry.issue?.title ?? "",
+                      output,
+                      status: runStatus ?? "draft",
+                      error: null,
+                      createdAt: entry.issue?.created_at ?? new Date().toISOString(),
+                    },
+                  ]
+                : [],
+            };
+          }),
+        } as LocalIssuesState;
+      },
+    },
   ),
 );
 
@@ -204,7 +241,19 @@ export function activeLocalTurn(record: LocalIssue | null): LocalIssueTurn | nul
   return turns.findLast((turn) => turn.status === "running") ?? null;
 }
 
-/** A local issue's record, or `null` when the id belongs to the server. */
-export function localIssueRecord(id: string): LocalIssue | null {
-  return useLocalIssuesStore.getState().issues.find((entry) => entry.issue.id === id) ?? null;
+/**
+ * A local issue's record, or `null` when it belongs to the server.
+ *
+ * Matches either the id or the `LOCAL-1` identifier: the detail route resolves
+ * a URL segment that can be either, exactly like a server issue.
+ */
+export function localIssueRecord(idOrIdentifier: string): LocalIssue | null {
+  return (
+    useLocalIssuesStore
+      .getState()
+      .issues.find(
+        (entry) =>
+          entry.issue.id === idOrIdentifier || entry.issue.identifier === idOrIdentifier,
+      ) ?? null
+  );
 }
