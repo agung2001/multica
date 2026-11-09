@@ -55,7 +55,7 @@ function run(overrides: Partial<LocalRun> = {}): LocalRun {
     output: "",
     createdAt: "2026-01-01T00:00:00Z",
     updatedAt: "2026-01-01T00:00:00Z",
-    publishedIssueId: null,
+    publishedAt: null,
     ...overrides,
   };
 }
@@ -74,16 +74,6 @@ describe("LocalBoard", () => {
 
     expect(screen.getByText(/Local runs need the desktop app/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Run" })).toHaveProperty("disabled", true);
-  });
-
-  it("creates a draft from the new-run button", async () => {
-    const user = userEvent.setup();
-    renderWithI18n(<LocalBoard agents={agents} onPublish={async () => null} />);
-
-    await user.click(screen.getByRole("button", { name: "New run" }));
-
-    expect(useLocalRunsStore.getState().runs).toHaveLength(1);
-    expect(screen.getByLabelText("Prompt")).toBeTruthy();
   });
 
   it("streams output into the selected run and records the exit", async () => {
@@ -125,17 +115,29 @@ describe("LocalBoard", () => {
     expect(useLocalRunsStore.getState().runs[0]?.output).toContain("spawn pi ENOENT");
   });
 
-  it("publishes through the host and remembers the issue", async () => {
-    const onPublish = vi.fn(async () => "issue-9");
+  it("hands a finished run to the host for publishing", async () => {
+    const onPublish = vi.fn();
     useLocalRunsStore.setState({ runs: [run()] });
     const user = userEvent.setup();
 
     renderWithI18n(<LocalBoard agents={agents} onPublish={onPublish} />);
     await user.click(screen.getByRole("button", { name: "Publish to board" }));
 
-    expect(onPublish).toHaveBeenCalled();
-    await waitFor(() =>
-      expect(useLocalRunsStore.getState().runs[0]?.publishedIssueId).toBe("issue-9"),
-    );
+    expect(onPublish).toHaveBeenCalledWith(expect.objectContaining({ id: "run-1" }));
+  });
+
+  it("creates a run from the dialog and keeps it in the drafts column", async () => {
+    const user = userEvent.setup();
+    renderWithI18n(<LocalBoard agents={agents} onPublish={() => {}} />);
+
+    await user.click(screen.getByRole("button", { name: "New run" }));
+    await user.type(screen.getByLabelText("Title"), "Wire the importer");
+    await user.selectOptions(screen.getByLabelText("Agent"), "agent-1");
+    await user.click(screen.getByRole("button", { name: "Create" }));
+
+    const created = useLocalRunsStore.getState().runs[0];
+    expect(created).toMatchObject({ title: "Wire the importer", agentId: "agent-1", status: "draft" });
+    // The command comes from the agent's program when the field is left empty.
+    expect(created?.command).toBe("pi -p --mode json");
   });
 });

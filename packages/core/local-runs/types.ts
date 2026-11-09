@@ -27,8 +27,8 @@ export interface LocalRun {
   output: string;
   createdAt: string;
   updatedAt: string;
-  /** Set once the run has been published to the shared board. */
-  publishedIssueId: string | null;
+  /** Set when the run was handed to the shared issue dialog. */
+  publishedAt: string | null;
 }
 
 /**

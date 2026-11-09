@@ -20,7 +20,8 @@
     "remove": "Eliminar ejecución",
     "output_label": "Salida",
     "output_empty": "La salida aparecerá aquí al iniciar.",
-    "select_hint": "Elige una ejecución o crea una."
+    "select_hint": "Elige una ejecución o crea una.",
+    "no_agent": "Sin agente"
   },
   "status": {
     "draft": "Borrador",
@@ -32,5 +33,23 @@
   "page": {
     "title": "Ejecuciones locales",
     "description": "Ejecuciones que solo ocurren en esta máquina. Nada llega al espacio de trabajo hasta que lo publiques."
+  },
+  "columns": {
+    "drafts": "Borradores",
+    "running": "En curso",
+    "finished": "Terminado"
+  },
+  "create": {
+    "title": "Nueva ejecución local",
+    "title_label": "Título",
+    "prompt_label": "Prompt",
+    "prompt_placeholder": "¿Qué debe hacer el agente?",
+    "agent_label": "Agente",
+    "agent_placeholder": "Elegir un agente",
+    "program_label": "Programa",
+    "folder_label": "Carpeta",
+    "folder_placeholder": "Carpeta personal",
+    "cancel": "Cancelar",
+    "submit": "Crear"
   }
 }

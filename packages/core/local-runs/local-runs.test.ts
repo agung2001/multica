@@ -27,7 +27,7 @@ describe("local drafts", () => {
       status: "draft",
       output: "",
       agentId: null,
-      publishedIssueId: null,
+      publishedAt: null,
     });
   });
 

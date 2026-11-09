@@ -82,7 +82,7 @@ export const useLocalRunsStore = create<LocalRunsState>()(
           output: "",
           createdAt: now,
           updatedAt: now,
-          publishedIssueId: null,
+          publishedAt: null,
         };
         set((state) => ({ runs: order([run, ...state.runs]) }));
         return id;

@@ -3,11 +3,12 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspaceId } from "@multica/core";
-import { defaultCommandForProvider } from "@multica/core/local-runs";
+import { defaultCommandForProvider, useLocalRunsStore } from "@multica/core/local-runs";
 import type { LocalRun } from "@multica/core/local-runs";
 import { agentListOptions } from "@multica/core/workspace/queries";
 import { runtimeListOptions } from "@multica/core/runtimes/queries";
-import { useCreateIssue } from "@multica/core/issues/mutations";
+import { useIssueDraftStore } from "@multica/core/issues/stores/draft-store";
+import { useModalStore } from "@multica/core/modals";
 import { useLocalDaemonStatus } from "../platform/use-local-daemon-status";
 import { useT } from "../i18n";
 import { LocalBoard, type LocalBoardAgent } from "./local-board";
@@ -26,7 +27,7 @@ export function LocalRunsPage() {
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   const { data: runtimes = [] } = useQuery(runtimeListOptions(wsId));
   const { daemonId } = useLocalDaemonStatus();
-  const createIssue = useCreateIssue();
+
 
   // Only CLIs registered by this machine's daemon can be run here. Other
   // machines of the same person are irrelevant: this board runs things locally
@@ -56,8 +57,11 @@ export function LocalRunsPage() {
     [agents, programs],
   );
 
+  // Publishing hands the run to the ordinary New issue dialog with the title
+  // and the output filled in, so status, priority and assignee are chosen in
+  // the place they always are. Nothing is created until that dialog is saved.
   const onPublish = useCallback(
-    async (run: LocalRun) => {
+    (run: LocalRun) => {
       const title = run.title.trim() || firstLine(run.body) || t(($) => $.board.untitled);
       const description = [
         run.body.trim(),
@@ -65,10 +69,11 @@ export function LocalRunsPage() {
       ]
         .filter(Boolean)
         .join("\n\n");
-      const issue = await createIssue.mutateAsync({ title, description });
-      return issue?.id ?? null;
+      useIssueDraftStore.getState().setManual({ title, description });
+      useModalStore.getState().open("create-issue");
+      useLocalRunsStore.getState().update(run.id, { publishedAt: new Date().toISOString() });
     },
-    [createIssue, t],
+    [t],
   );
 
   return (

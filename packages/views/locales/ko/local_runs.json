@@ -20,7 +20,8 @@
     "remove": "실행 삭제",
     "output_label": "출력",
     "output_empty": "실행이 시작되면 출력이 여기에 표시됩니다.",
-    "select_hint": "실행을 선택하거나 새로 만드세요."
+    "select_hint": "실행을 선택하거나 새로 만드세요.",
+    "no_agent": "에이전트 없음"
   },
   "status": {
     "draft": "초안",
@@ -32,5 +33,23 @@
   "page": {
     "title": "로컬 실행",
     "description": "이 컴퓨터에서만 실행됩니다. 게시하기 전까지는 워크스페이스에 전달되지 않습니다."
+  },
+  "columns": {
+    "drafts": "초안",
+    "running": "실행 중",
+    "finished": "완료"
+  },
+  "create": {
+    "title": "새 로컬 실행",
+    "title_label": "제목",
+    "prompt_label": "프롬프트",
+    "prompt_placeholder": "에이전트가 무엇을 해야 하나요?",
+    "agent_label": "에이전트",
+    "agent_placeholder": "에이전트 선택",
+    "program_label": "프로그램",
+    "folder_label": "폴더",
+    "folder_placeholder": "홈 폴더",
+    "cancel": "취소",
+    "submit": "만들기"
   }
 }

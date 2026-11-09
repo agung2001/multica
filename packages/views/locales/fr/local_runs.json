@@ -20,7 +20,8 @@
     "remove": "Supprimer l'exécution",
     "output_label": "Sortie",
     "output_empty": "La sortie s'affichera ici au démarrage.",
-    "select_hint": "Choisissez une exécution ou créez-en une."
+    "select_hint": "Choisissez une exécution ou créez-en une.",
+    "no_agent": "Aucun agent"
   },
   "status": {
     "draft": "Brouillon",
@@ -32,5 +33,23 @@
   "page": {
     "title": "Exécutions locales",
     "description": "Exécutions qui n'ont lieu que sur cette machine. Rien n'est envoyé à l'espace de travail avant publication."
+  },
+  "columns": {
+    "drafts": "Brouillons",
+    "running": "En cours",
+    "finished": "Terminé"
+  },
+  "create": {
+    "title": "Nouvelle exécution locale",
+    "title_label": "Titre",
+    "prompt_label": "Invite",
+    "prompt_placeholder": "Que doit faire l'agent ?",
+    "agent_label": "Agent",
+    "agent_placeholder": "Choisir un agent",
+    "program_label": "Programme",
+    "folder_label": "Dossier",
+    "folder_placeholder": "Dossier personnel",
+    "cancel": "Annuler",
+    "submit": "Créer"
   }
 }

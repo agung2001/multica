@@ -20,7 +20,8 @@
     "remove": "実行を削除",
     "output_label": "出力",
     "output_empty": "実行が始まるとここに出力が表示されます。",
-    "select_hint": "実行を選択するか、新規作成してください。"
+    "select_hint": "実行を選択するか、新規作成してください。",
+    "no_agent": "エージェントなし"
   },
   "status": {
     "draft": "下書き",
@@ -32,5 +33,23 @@
   "page": {
     "title": "ローカル実行",
     "description": "このマシンだけで実行されます。公開するまでワークスペースには送られません。"
+  },
+  "columns": {
+    "drafts": "下書き",
+    "running": "実行中",
+    "finished": "完了"
+  },
+  "create": {
+    "title": "新しいローカル実行",
+    "title_label": "タイトル",
+    "prompt_label": "プロンプト",
+    "prompt_placeholder": "エージェントに何をさせますか？",
+    "agent_label": "エージェント",
+    "agent_placeholder": "エージェントを選択",
+    "program_label": "プログラム",
+    "folder_label": "フォルダ",
+    "folder_placeholder": "ホームフォルダ",
+    "cancel": "キャンセル",
+    "submit": "作成"
   }
 }

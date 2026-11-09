@@ -6,13 +6,15 @@ import {
   splitCommandLine,
   useLocalRunsStore,
   type LocalRun,
+  type LocalRunStatus,
 } from "@multica/core/local-runs";
 import { Button } from "@multica/ui/components/ui/button";
 import { Input } from "@multica/ui/components/ui/input";
 import { Textarea } from "@multica/ui/components/ui/textarea";
-import { Plus, Trash2 } from "@multica/ui/icons";
+import { Monitor, Plus, Send, Square, Trash2 } from "@multica/ui/icons";
 import { cn } from "@multica/ui/lib/utils";
 import { useT } from "../i18n";
+import { LocalRunDialog, type LocalRunDraft } from "./local-run-dialog";
 
 export type LocalBoardAgent = {
   id: string;
@@ -25,17 +27,24 @@ export type LocalBoardAgent = {
 
 type LocalBoardProps = {
   agents: LocalBoardAgent[];
-  /** Creates a shared issue out of a finished run. Resolves to the issue id. */
-  onPublish: (run: LocalRun) => Promise<string | null>;
+  /** Hands a finished run to the shared issue dialog, prefilled. */
+  onPublish: (run: LocalRun) => void;
   className?: string;
 };
+
+/** Column layout, mirroring the issues board's status columns. */
+const COLUMNS: { key: string; statuses: LocalRunStatus[] }[] = [
+  { key: "drafts", statuses: ["draft", "stopped"] },
+  { key: "running", statuses: ["running"] },
+  { key: "finished", statuses: ["done", "failed"] },
+];
 
 /**
  * The private board: work that exists only on this device.
  *
- * Nothing here reaches the server until someone publishes a run, which is what
- * lets two people run the same agent at the same time — and what makes this
- * history disappear when the app's data is cleared.
+ * Same shape as the issues board — columns, cards, a detail panel — but the
+ * cards come from local storage instead of the server, which is what lets two
+ * people run the same agent at the same time.
  */
 export function LocalBoard({ agents, onPublish, className }: LocalBoardProps) {
   const { t } = useT("local_runs");
@@ -46,9 +55,8 @@ export function LocalBoard({ agents, onPublish, className }: LocalBoardProps) {
   const setStatus = useLocalRunsStore((state) => state.setStatus);
   const appendOutput = useLocalRunsStore((state) => state.appendOutput);
   const clearOutput = useLocalRunsStore((state) => state.clearOutput);
-  const bindings = useLocalRunsStore((state) => state.bindings);
 
-  const statusLabels: Record<LocalRun["status"], string> = useMemo(
+  const statusLabels: Record<LocalRunStatus, string> = useMemo(
     () => ({
       draft: t(($) => $.status.draft),
       running: t(($) => $.status.running),
@@ -58,132 +66,134 @@ export function LocalBoard({ agents, onPublish, className }: LocalBoardProps) {
     }),
     [t],
   );
+  const columnLabels: Record<string, string> = useMemo(
+    () => ({
+      drafts: t(($) => $.columns.drafts),
+      running: t(($) => $.columns.running),
+      finished: t(($) => $.columns.finished),
+    }),
+    [t],
+  );
 
   const runner = useMemo(() => localRunRunner(), []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const stopRef = useRef<(() => void) | null>(null);
-  const [publishing, setPublishing] = useState(false);
 
-  const selected = runs.find((run) => run.id === selectedId) ?? runs[0] ?? null;
-  const argv = selected ? splitCommandLine(selected.command) : [];
-  const canRun =
-    runner !== null &&
-    selected !== null &&
-    argv.length > 0 &&
-    selected.agentId !== null &&
-    selected.status !== "running";
+  const detail = runs.find((run) => run.id === detailId) ?? null;
 
   useEffect(() => () => stopRef.current?.(), []);
 
-  const startRun = () => {
-    if (!runner || !selected || argv.length === 0) return;
-    const runId = selected.id;
-    clearOutput(runId);
-    setStatus(runId, "running");
-    const agent = agents.find((entry) => entry.id === selected.agentId) ?? null;
+  const startRun = (run: LocalRun) => {
+    const argv = splitCommandLine(run.command);
+    if (!runner || argv.length === 0) return;
+    const agent = agents.find((entry) => entry.id === run.agentId) ?? null;
+    clearOutput(run.id);
+    setStatus(run.id, "running");
+    setDetailId(run.id);
     const handle = runner.start({
       argv,
-      cwd: selected.cwd,
+      cwd: run.cwd,
       // The agent's configured instructions travel with the prompt: this run
       // borrows the agent, it does not reimplement it.
-      prompt: [agent?.instructions?.trim(), selected.body.trim()]
-        .filter(Boolean)
-        .join("\n\n"),
-      onOutput: (chunk) => appendOutput(runId, chunk),
+      prompt: [agent?.instructions?.trim(), run.body.trim()].filter(Boolean).join("\n\n"),
+      onOutput: (chunk) => appendOutput(run.id, chunk),
       onExit: (result) => {
         stopRef.current = null;
-        setStatus(runId, result.error ? "failed" : result.code === 0 ? "done" : "failed");
-        if (result.error) appendOutput(runId, `\n${result.error}\n`);
+        setStatus(run.id, result.error ? "failed" : result.code === 0 ? "done" : "failed");
+        if (result.error) appendOutput(run.id, `\n${result.error}\n`);
       },
     });
     stopRef.current = handle.stop;
   };
 
-  const stopRun = () => {
+  const stopRun = (run: LocalRun) => {
     stopRef.current?.();
     stopRef.current = null;
-    if (selected) setStatus(selected.id, "stopped");
+    setStatus(run.id, "stopped");
   };
 
-  const publish = async () => {
-    if (!selected) return;
-    setPublishing(true);
-    try {
-      const issueId = await onPublish(selected);
-      if (issueId) {
-        update(selected.id, { publishedIssueId: issueId });
-        setStatus(selected.id, "done");
-      }
-    } finally {
-      setPublishing(false);
-    }
+  const onCreate = (draft: LocalRunDraft) => {
+    const agent = agents.find((entry) => entry.id === draft.agentId) ?? null;
+    const id = create({
+      title: draft.title,
+      agentId: draft.agentId,
+      agentName: agent?.name ?? "",
+      command: draft.command,
+    });
+    update(id, { body: draft.body, cwd: draft.cwd });
+    setDetailId(id);
   };
 
   return (
-    <div className={cn("@container flex min-h-0 flex-1 gap-4", className)}>
-      <aside className="flex w-64 shrink-0 flex-col gap-2">
-        <Button
-          variant="outline"
-          className="justify-start gap-2"
-          onClick={() => setSelectedId(create({ title: "" }))}
-        >
+    <div className={cn("flex min-h-0 flex-1 flex-col gap-3", className)}>
+      <div className="flex items-center gap-2">
+        <Button variant="outline" className="gap-2" onClick={() => setDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           {t(($) => $.board.new_run)}
         </Button>
-        <ul className="min-h-0 flex-1 overflow-y-auto">
-          {runs.length === 0 ? (
-            <li className="px-2 py-6 text-caption text-muted-foreground">
-              {t(($) => $.board.empty)}
-            </li>
-          ) : null}
-          {runs.map((run) => (
-            <li key={run.id}>
-              <button
-                type="button"
-                onClick={() => setSelectedId(run.id)}
-                className={cn(
-                  "flex w-full min-w-0 flex-col gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
-                  run.id === selected?.id && "bg-accent",
-                )}
-              >
-                <span className="truncate text-body">{run.title || t(($) => $.board.untitled)}</span>
-                <span className="truncate text-caption text-muted-foreground">
-                  {statusLabels[run.status]}
-                  {run.agentName ? ` · ${run.agentName}` : ""}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
-
-      <section className="flex min-w-0 flex-1 flex-col gap-3">
         {!runner ? (
-          <p className="rounded-md border border-dashed border-border px-3 py-2 text-caption text-muted-foreground">
-            {t(($) => $.board.desktop_only)}
-          </p>
+          <p className="text-caption text-muted-foreground">{t(($) => $.board.desktop_only)}</p>
         ) : null}
+      </div>
 
-        {selected ? (
-          <>
+      <div className="flex min-h-0 flex-1 gap-3">
+        <div className="@container flex min-w-0 flex-1 gap-3 overflow-x-auto">
+          {COLUMNS.map((column) => {
+            const items = runs.filter((run) => column.statuses.includes(run.status));
+            return (
+              <section
+                key={column.key}
+                aria-label={columnLabels[column.key]}
+                className="flex min-w-56 flex-1 shrink-0 flex-col rounded-xl bg-muted/40 p-2"
+              >
+                <header className="mb-2 flex items-center justify-between gap-2 px-1.5">
+                  <span className="text-caption font-medium">{columnLabels[column.key]}</span>
+                  <span className="text-caption tabular-nums text-muted-foreground">
+                    {items.length}
+                  </span>
+                </header>
+                <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+                  {items.map((run) => (
+                    <LocalRunCard
+                      key={run.id}
+                      run={run}
+                      selected={run.id === detailId}
+                      runnerAvailable={runner !== null}
+                      statusLabel={statusLabels[run.status]}
+                      onSelect={() => setDetailId(run.id)}
+                      onRun={() => startRun(run)}
+                      onStop={() => stopRun(run)}
+                      onPublish={() => onPublish(run)}
+                    />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        {detail ? (
+          <aside className="flex w-96 shrink-0 flex-col gap-2 rounded-xl border border-border p-3">
             <Input
               aria-label={t(($) => $.board.title_label)}
               placeholder={t(($) => $.board.title_placeholder)}
-              value={selected.title}
-              onChange={(event) => update(selected.id, { title: event.target.value })}
+              value={detail.title}
+              onChange={(event) => update(detail.id, { title: event.target.value })}
             />
-
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex gap-2">
               <select
                 aria-label={t(($) => $.board.agent_label)}
-                className="h-9 min-w-40 rounded-md border border-input bg-transparent px-2 text-body"
-                value={selected.agentId ?? ""}
+                className="h-9 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2 text-body"
+                value={detail.agentId ?? ""}
                 onChange={(event) => {
                   const agent = agents.find((entry) => entry.id === event.target.value) ?? null;
-                  update(selected.id, {
+                  update(detail.id, {
                     agentId: agent?.id ?? null,
                     agentName: agent?.name ?? "",
-                    command: agent ? commandFor(agent, bindings, selected.command) : "",
+                    command: detail.command.trim()
+                      ? detail.command
+                      : (agent?.programs[0]?.command ?? ""),
                   });
                 }}
               >
@@ -194,101 +204,136 @@ export function LocalBoard({ agents, onPublish, className }: LocalBoardProps) {
                   </option>
                 ))}
               </select>
-
-              <Input
-                aria-label={t(($) => $.board.command_label)}
-                className="min-w-64 flex-1 font-mono text-caption"
-                value={selected.command}
-                onChange={(event) => update(selected.id, { command: event.target.value })}
-              />
-              <Input
-                aria-label={t(($) => $.board.cwd_label)}
-                className="min-w-48 flex-1 font-mono text-caption"
-                placeholder={t(($) => $.board.cwd_placeholder)}
-                value={selected.cwd}
-                onChange={(event) => update(selected.id, { cwd: event.target.value })}
-              />
-            </div>
-
-            <Textarea
-              aria-label={t(($) => $.board.body_label)}
-              className="min-h-28 resize-y"
-              rows={5}
-              placeholder={t(($) => $.board.body_placeholder)}
-              value={selected.body}
-              onChange={(event) => update(selected.id, { body: event.target.value })}
-            />
-
-            <div className="flex items-center gap-2">
-              {selected.status === "running" ? (
-                <Button variant="outline" onClick={stopRun}>
-                  {t(($) => $.board.stop)}
-                </Button>
-              ) : (
-                <Button onClick={startRun} disabled={!canRun}>
-                  {t(($) => $.board.run)}
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                onClick={publish}
-                disabled={publishing || selected.status === "running" || !selected.body.trim()}
-              >
-                {selected.publishedIssueId
-                  ? t(($) => $.board.published)
-                  : t(($) => $.board.publish)}
-              </Button>
-              <span className="ml-auto flex items-center gap-2 text-caption text-muted-foreground">
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 rounded-full",
-                    selected.status === "running"
-                      ? "bg-success"
-                      : selected.status === "failed"
-                        ? "bg-destructive"
-                        : "bg-muted-foreground/40",
-                  )}
-                  aria-hidden="true"
-                />
-                {statusLabels[selected.status]}
-              </span>
               <Button
                 variant="ghost"
                 aria-label={t(($) => $.board.remove)}
                 onClick={() => {
-                  remove(selected.id);
-                  setSelectedId(null);
+                  remove(detail.id);
+                  setDetailId(null);
                 }}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
-
+            <Input
+              aria-label={t(($) => $.board.command_label)}
+              className="font-mono text-caption"
+              value={detail.command}
+              onChange={(event) => update(detail.id, { command: event.target.value })}
+            />
+            <Input
+              aria-label={t(($) => $.board.cwd_label)}
+              className="font-mono text-caption"
+              placeholder={t(($) => $.board.cwd_placeholder)}
+              value={detail.cwd}
+              onChange={(event) => update(detail.id, { cwd: event.target.value })}
+            />
+            <Textarea
+              aria-label={t(($) => $.board.body_label)}
+              className="min-h-24 resize-y"
+              rows={5}
+              placeholder={t(($) => $.board.body_placeholder)}
+              value={detail.body}
+              onChange={(event) => update(detail.id, { body: event.target.value })}
+            />
             <pre
               aria-label={t(($) => $.board.output_label)}
-              className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 font-mono text-caption"
+              className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded-md bg-muted/30 p-2 font-mono text-caption"
             >
-              {selected.output || t(($) => $.board.output_empty)}
+              {detail.output || t(($) => $.board.output_empty)}
             </pre>
-          </>
-        ) : (
-          <p className="px-2 py-6 text-caption text-muted-foreground">
-            {t(($) => $.board.select_hint)}
-          </p>
-        )}
-      </section>
+          </aside>
+        ) : null}
+      </div>
+
+      <LocalRunDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        agents={agents}
+        onCreate={onCreate}
+      />
     </div>
   );
 }
 
-function commandFor(
-  agent: LocalBoardAgent,
-  bindings: Record<string, { command: string }>,
-  current: string,
-): string {
-  // A run keeps whatever it was using: only fill in a default when the field is
-  // still empty, so switching agents never overwrites a tuned command line.
-  if (current.trim()) return current;
-  return bindings[agent.id]?.command ?? agent.programs[0]?.command ?? "";
-}
+function LocalRunCard({
+  run,
+  selected,
+  runnerAvailable,
+  statusLabel,
+  onSelect,
+  onRun,
+  onStop,
+  onPublish,
+}: {
+  run: LocalRun;
+  selected: boolean;
+  runnerAvailable: boolean;
+  statusLabel: string;
+  onSelect: () => void;
+  onRun: () => void;
+  onStop: () => void;
+  onPublish: () => void;
+}) {
+  const { t } = useT("local_runs");
+  const running = run.status === "running";
+  const canRun = runnerAvailable && !running && splitCommandLine(run.command).length > 0;
 
+  return (
+    <article
+      className={cn(
+        "group/card flex flex-col gap-1.5 rounded-lg border border-border bg-card p-2.5 text-left shadow-sm transition-colors",
+        selected ? "border-brand/60 ring-1 ring-brand/30" : "hover:border-border/80 hover:bg-accent/40",
+      )}
+    >
+      <button type="button" onClick={onSelect} className="flex flex-col gap-1 text-left">
+        <span className="line-clamp-2 text-body font-medium">
+          {run.title || t(($) => $.board.untitled)}
+        </span>
+        <span className="flex min-w-0 items-center gap-1.5 text-caption text-muted-foreground">
+          <Monitor className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="min-w-0 truncate">{run.agentName || t(($) => $.board.no_agent)}</span>
+          <span aria-hidden="true">·</span>
+          <span
+            className={cn(
+              "truncate",
+              run.status === "failed" && "text-destructive",
+              run.status === "running" && "text-success",
+            )}
+          >
+            {statusLabel}
+          </span>
+        </span>
+      </button>
+
+      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/card:opacity-100 group-focus-within/card:opacity-100">
+        {running ? (
+          <Button size="sm" variant="outline" className="h-6 gap-1 px-2 text-caption" onClick={onStop}>
+            <Square className="h-3 w-3" />
+            {t(($) => $.board.stop)}
+          </Button>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 gap-1 px-2 text-caption"
+            disabled={!canRun}
+            onClick={onRun}
+          >
+            {t(($) => $.board.run)}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 gap-1 px-2 text-caption"
+          disabled={running || !run.body.trim()}
+          onClick={onPublish}
+        >
+          <Send className="h-3 w-3" />
+          {run.publishedAt ? t(($) => $.board.published) : t(($) => $.board.publish)}
+        </Button>
+      </div>
+    </article>
+  );
+}
