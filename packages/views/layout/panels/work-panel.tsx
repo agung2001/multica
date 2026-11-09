@@ -16,7 +16,8 @@ import { useNavigation } from "../../navigation";
 import { IssueContextMenuProvider } from "../../issues/actions";
 import { useIssueViewActions } from "../../issue-views/use-view-actions";
 import { useT } from "../../i18n";
-import { PanelBody, PanelHeader, isPathWithin } from "../panel-nav";
+import { Monitor } from "@multica/ui/icons";
+import { PanelBody, PanelHeader, PanelLink, PanelList, isPathWithin } from "../panel-nav";
 import { PinnedSection, usePanelPins } from "./pinned-section";
 import { useKeptActiveItem } from "./sidebar-tree";
 import { ProjectsSection, useIssueInTree } from "./work-tree";
@@ -177,6 +178,19 @@ export function WorkPanel() {
               litSource={litSource}
               actions={viewActions}
             />
+          )}
+
+          {/* The private board sits with the issue lists: it is where work
+              happens, it just never leaves this machine. */}
+          {wsId && (
+            <PanelList className="mt-px">
+              <PanelLink
+                href={p.localRuns()}
+                icon={<Monitor className="size-4 shrink-0" />}
+                label={t(($) => $.panels.work.local_runs)}
+                active={isPathWithin(pathname, p.localRuns())}
+              />
+            </PanelList>
           )}
 
           {wsId && (

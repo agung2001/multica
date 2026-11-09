@@ -12,7 +12,8 @@
     "runtimes": "Runtimes",
     "skills": "Skills",
     "settings": "Ajustes",
-    "views": "Vistas"
+    "views": "Vistas",
+    "local_runs": "Ejecuciones locales"
   },
   "tab": {
     "issue": "Tarea",
@@ -140,7 +141,8 @@
       "view_remove": "Quitar de la barra lateral",
       "view_rename": "Renombrar",
       "view_duplicate": "Duplicar",
-      "view_delete": "Eliminar vista"
+      "view_delete": "Eliminar vista",
+      "local_runs": "Ejecuciones locales"
     },
     "team": {
       "new_agent": "Nuevo agente",

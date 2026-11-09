@@ -85,7 +85,8 @@
     "model": "Model",
     "created": "Created",
     "owner": "Owner",
-    "access": "Access"
+    "access": "Access",
+    "run_on_my_machine": "Run on my machine"
   },
   "row": {
     "you": "You",
@@ -96,8 +97,7 @@
     "fallback_runtime_local": "Local",
     "actions_aria": "Row actions",
     "task_count_one": "{{count}} run",
-    "task_count_other": "{{count}} runs",
-    "my_machine": "My Machine"
+    "task_count_other": "{{count}} runs"
   },
   "activity_tooltip": {
     "created_today": "Created today",

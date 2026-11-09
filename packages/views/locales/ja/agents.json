@@ -75,7 +75,8 @@
     "model": "モデル",
     "created": "作成日時",
     "owner": "オーナー",
-    "access": "アクセス"
+    "access": "アクセス",
+    "run_on_my_machine": "ローカル実行"
   },
   "row": {
     "you": "あなた",
@@ -85,8 +86,7 @@
     "fallback_runtime_cloud": "クラウド",
     "fallback_runtime_local": "ローカル",
     "actions_aria": "行の操作",
-    "task_count_other": "{{count}} 件の実行",
-    "my_machine": "自分のマシン"
+    "task_count_other": "{{count}} 件の実行"
   },
   "activity_tooltip": {
     "created_today": "今日作成",

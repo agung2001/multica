@@ -83,7 +83,8 @@
     "model": "모델",
     "created": "생성일",
     "owner": "소유자",
-    "access": "접근 권한"
+    "access": "접근 권한",
+    "run_on_my_machine": "내 컴퓨터 실행"
   },
   "row": {
     "you": "나",
@@ -93,8 +94,7 @@
     "fallback_runtime_cloud": "클라우드",
     "fallback_runtime_local": "로컬",
     "actions_aria": "행 작업",
-    "task_count_other": "실행 {{count}}개",
-    "my_machine": "내 컴퓨터"
+    "task_count_other": "실행 {{count}}개"
   },
   "activity_tooltip": {
     "created_today": "오늘 생성됨",

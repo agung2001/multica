@@ -83,7 +83,8 @@
     "model": "模型",
     "created": "创建时间",
     "owner": "owner",
-    "access": "访问权限"
+    "access": "访问权限",
+    "run_on_my_machine": "本机运行"
   },
   "row": {
     "you": "你",
@@ -93,8 +94,7 @@
     "fallback_runtime_cloud": "云端",
     "fallback_runtime_local": "本地",
     "actions_aria": "行操作",
-    "task_count_other": "{{count}} 次运行",
-    "my_machine": "我的机器"
+    "task_count_other": "{{count}} 次运行"
   },
   "activity_tooltip": {
     "created_today": "今天创建",

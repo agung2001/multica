@@ -18,7 +18,7 @@ function makeRow(
   rowOverrides: Partial<AgentListRow> = {},
 ): AgentListRow {
   return {
-    runtimeIsLocal: false,
+    localProgram: null,
     agent: {
       id: "agent-1",
       workspace_id: "ws-1",

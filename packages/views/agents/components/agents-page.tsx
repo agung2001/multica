@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Bot,
   Lock,
+  Monitor,
 } from "@multica/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import type {
@@ -32,6 +33,7 @@ import {
 } from "@multica/core/agents/stores";
 import { useAuthStore } from "@multica/core/auth";
 import { useWorkspaceId } from "@multica/core/hooks";
+import { useLocalRunsStore } from "@multica/core/local-runs";
 import { useWorkspacePaths } from "@multica/core/paths";
 import {
   agentListOptions,
@@ -84,7 +86,8 @@ export interface AgentListRow {
    * column then reads "My Machine" instead of echoing a machine name the reader
    * has to recognise as their own laptop.
    */
-  runtimeIsLocal: boolean;
+  /** The agent CLI this device runs the agent with, from the private binding. */
+  localProgram: string | null;
   presence: AgentPresenceDetail | null;
   activity: AgentActivity | null;
   runCount: number;
@@ -185,8 +188,8 @@ import { AgentsIntro } from "./agents-intro";
 export { isAccessChangeReady };
 
 export interface AgentsPageProps {
-  /** Desktop-only: the daemon this device runs. The Runtime column uses it to
-   *  label an agent bound here as "My Machine". Absent on web. */
+  /** Desktop-only machine identity. Kept for the host's props; the agents table
+   *  no longer uses it — the local binding has its own column. */
   localDaemonId?: string | null;
   localMachineName?: string | null;
   hasLocalMachine?: boolean;
@@ -335,14 +338,6 @@ export function AccessCell({ row }: { row: AgentListRow }) {
 }
 
 /** Is this runtime registered by the daemon running on this device? */
-function isLocalRuntime(
-  runtime: AgentRuntime | undefined,
-  localDaemonId: string | null | undefined,
-): boolean {
-  if (!runtime || !localDaemonId) return false;
-  return runtime.daemon_id === localDaemonId;
-}
-
 export function RuntimeCell({ row }: { row: AgentListRow }) {
   const { t } = useT("agents");
   if (!isAgentRuntimeBound(row.agent)) {
@@ -359,15 +354,24 @@ export function RuntimeCell({ row }: { row: AgentListRow }) {
   return (
     <>
       <ProviderLogo provider={runtime.provider} className="h-3.5 w-3.5 shrink-0" />
-      {row.runtimeIsLocal ? (
-        // The machine name would only be read back as "that is my laptop" —
-        // say it, and keep the exact runtime in the tooltip for disambiguation.
-        <TruncatedTooltip content={runtimeDisplayLabel(runtime)}>
-          <span className="min-w-0 truncate">{t(($) => $.row.my_machine)}</span>
-        </TruncatedTooltip>
-      ) : (
-        <span className="min-w-0 truncate">{runtimeDisplayLabel(runtime)}</span>
-      )}
+      <span className="min-w-0 truncate">{runtimeDisplayLabel(runtime)}</span>
+    </>
+  );
+}
+
+/**
+ * "Run on my machine": which agent CLI this device runs the agent with.
+ *
+ * Separate from the Runtime column on purpose — Runtime is the owner's
+ * configuration stored on the server, this is a private preference that never
+ * leaves the device.
+ */
+export function LocalProgramCell({ row }: { row: AgentListRow }) {
+  if (!row.localProgram) return <CollectionEmptyValue />;
+  return (
+    <>
+      <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+      <span className="min-w-0 truncate">{row.localProgram}</span>
     </>
   );
 }
@@ -393,7 +397,7 @@ function LastActiveCell({ row }: { row: AgentListRow }) {
 
 // Page
 
-export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
+export function AgentsPage(_props: AgentsPageProps = {}) {
   const { t } = useT("agents");
   const locale = useLocale();
   const wsId = useWorkspaceId();
@@ -444,6 +448,20 @@ export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
     for (const r of runtimes) m.set(r.id, r);
     return m;
   }, [runtimes]);
+
+  // Private per-device preference: which CLI runs this agent here. Read from
+  // the local store, never from the agent record.
+  const localBindings = useLocalRunsStore((state) => state.bindings);
+  const localProgramFor = useCallback(
+    (agentId: string) => {
+      const binding = localBindings[agentId];
+      if (!binding) return null;
+      const runtime = runtimesById.get(binding.runtimeId);
+      return runtime ? runtimeDisplayLabel(runtime) : binding.provider || null;
+    },
+    [localBindings, runtimesById],
+  );
+
 
   const runCountsById = useMemo(() => {
     const m = new Map<string, number>();
@@ -498,7 +516,7 @@ export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
       return {
         agent,
         runtime: runtimesById.get(agent.runtime_id) ?? null,
-        runtimeIsLocal: isLocalRuntime(runtimesById.get(agent.runtime_id), localDaemonId),
+        localProgram: localProgramFor(agent.id),
         presence: presenceMap.get(agent.id) ?? null,
         activity,
         runCount: runCountsById.get(agent.id) ?? 0,
@@ -513,7 +531,7 @@ export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
     scope,
     currentUser,
     runtimesById,
-    localDaemonId,
+    localProgramFor,
     membersById,
     presenceMap,
     activityMap,
@@ -621,6 +639,13 @@ export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
         width: 152,
         hideable: true,
         cell: (row) => <RuntimeCell row={row} />,
+      },
+      {
+        key: "localProgram",
+        header: t(($) => $.columns.run_on_my_machine),
+        width: 152,
+        hideable: true,
+        cell: (row) => <LocalProgramCell row={row} />,
       },
       {
         key: "model",

@@ -85,7 +85,8 @@
     "model": "Modèle",
     "created": "Création",
     "owner": "Propriétaire",
-    "access": "Accès"
+    "access": "Accès",
+    "run_on_my_machine": "Sur ma machine"
   },
   "row": {
     "you": "Vous",
@@ -96,8 +97,7 @@
     "fallback_runtime_local": "Local",
     "actions_aria": "Actions de la ligne",
     "task_count_one": "{{count}} exécution",
-    "task_count_other": "{{count}} exécutions",
-    "my_machine": "Ma machine"
+    "task_count_other": "{{count}} exécutions"
   },
   "activity_tooltip": {
     "created_today": "Créé aujourd'hui",

@@ -12,7 +12,8 @@
     "runtimes": "Runtimes",
     "skills": "Skills",
     "settings": "Settings",
-    "views": "Views"
+    "views": "Views",
+    "local_runs": "Local runs"
   },
   "tab": {
     "issue": "Issue",
@@ -140,7 +141,8 @@
       "view_remove": "Remove from sidebar",
       "view_rename": "Rename",
       "view_duplicate": "Duplicate",
-      "view_delete": "Delete view"
+      "view_delete": "Delete view",
+      "local_runs": "Local runs"
     },
     "team": {
       "new_agent": "New agent",

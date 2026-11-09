@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, screen } from "@testing-library/react";
 import type { Agent, AgentRuntime } from "@multica/core/types";
 import { renderWithI18n } from "../../test/i18n";
-import { RuntimeCell, type AgentListRow } from "./agents-page";
+import { LocalProgramCell, RuntimeCell, type AgentListRow } from "./agents-page";
 
 vi.mock("../../runtimes/components/provider-logo", () => ({
   ProviderLogo: () => null,
@@ -42,7 +42,7 @@ function row(overrides: Partial<AgentListRow> = {}): AgentListRow {
       name: "Reviewer",
     } as Agent,
     runtime: runtime(),
-    runtimeIsLocal: false,
+    localProgram: null,
     presence: null,
     activity: null,
     runCount: 0,
@@ -56,6 +56,22 @@ function row(overrides: Partial<AgentListRow> = {}): AgentListRow {
 
 afterEach(cleanup);
 
+describe("LocalProgramCell", () => {
+  it("shows the agent CLI this device runs the agent with", () => {
+    renderWithI18n(<LocalProgramCell row={row({ localProgram: "Pi" })} />);
+
+    expect(screen.getByText("Pi")).toBeTruthy();
+  });
+
+  it("shows nothing when this device has no binding", () => {
+    const { container } = renderWithI18n(
+      <LocalProgramCell row={row({ localProgram: null })} />,
+    );
+
+    expect(container.textContent).not.toContain("Pi");
+  });
+});
+
 describe("RuntimeCell", () => {
   it("shows the runtime label for a machine elsewhere", () => {
     renderWithI18n(<RuntimeCell row={row()} />);
@@ -63,17 +79,12 @@ describe("RuntimeCell", () => {
     expect(screen.getByText(/Devs-MacBook-Pro/)).toBeTruthy();
   });
 
-  it("says My Machine for the runtime registered by this device", () => {
-    renderWithI18n(<RuntimeCell row={row({ runtimeIsLocal: true })} />);
+  it("always shows the owner's runtime, whatever this device runs locally", () => {
+    // The private binding lives in its own column; Runtime never reports it.
+    renderWithI18n(<RuntimeCell row={row({ localProgram: "Pi" })} />);
 
-    expect(screen.getByText("My Machine")).toBeTruthy();
-  });
-
-  it("keeps the exact runtime reachable for disambiguation", () => {
-    renderWithI18n(<RuntimeCell row={row({ runtimeIsLocal: true })} />);
-
-    // The tooltip carries the label one would have seen otherwise.
-    expect(screen.getByText("My Machine")).toBeTruthy();
+    expect(screen.getByText(/Devs-MacBook-Pro/)).toBeTruthy();
+    expect(screen.queryByText("My Machine")).toBeNull();
   });
 
   it("flags an unbound agent instead of showing a machine", () => {

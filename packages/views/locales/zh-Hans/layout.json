@@ -12,7 +12,8 @@
     "runtimes": "运行时",
     "skills": "Skills",
     "settings": "设置",
-    "views": "视图"
+    "views": "视图",
+    "local_runs": "本地运行"
   },
   "tab": {
     "issue": "任务",
@@ -139,7 +140,8 @@
       "view_remove": "从侧栏移除",
       "view_rename": "重命名",
       "view_duplicate": "创建副本",
-      "view_delete": "删除视图"
+      "view_delete": "删除视图",
+      "local_runs": "本地运行"
     },
     "team": {
       "new_agent": "新建智能体",

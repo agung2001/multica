@@ -76,7 +76,7 @@ function makeRow(
   return {
     agent: agent as AgentListRow["agent"],
     runtime: null,
-    runtimeIsLocal: false,
+    localProgram: null,
     presence: null,
     activity: null,
     runCount: 0,
