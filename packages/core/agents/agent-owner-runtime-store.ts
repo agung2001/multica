@@ -54,6 +54,13 @@ export const useAgentOwnerRuntimeStore = create<AgentOwnerRuntimeState>()(
     {
       name: "multica_agent_owner_runtime",
       storage: createJSONStorage(() => stateStorage),
+      // Version 1 held entries written while an override was already active, so
+      // any of them may name the runtime being switched away from instead of
+      // the owner's. They are dropped wholesale rather than migrated: a missing
+      // entry costs one press of "Default", a wrong one shows someone else's
+      // machine as the owner's configuration.
+      version: 2,
+      migrate: () => ({ entries: {} }),
     },
   ),
 );
