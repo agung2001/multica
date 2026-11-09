@@ -82,6 +82,38 @@ function render(props: Partial<React.ComponentProps<typeof RunOnMyMachine>> = {}
   return { onBind };
 }
 
+/** Renders once and re-renders with a refetched agent, like the real form. */
+function renderSwitching(
+  props: Partial<React.ComponentProps<typeof RunOnMyMachine>> = {},
+) {
+  const onBind = vi.fn();
+  const view = renderWithI18n(
+    <RunOnMyMachine
+      agent={agentOn(ownerRuntime.id)}
+      runtimes={ALL}
+      currentUserId="user-me"
+      canEdit
+      localDaemonId={THIS_DAEMON}
+      onBind={onBind}
+      {...props}
+    />,
+  );
+  // Spread first: `props.agent` must not overwrite the refetched one.
+  const setAgent = (next: Agent) =>
+    view.rerender(
+      <RunOnMyMachine
+        runtimes={ALL}
+        currentUserId="user-me"
+        canEdit
+        localDaemonId={THIS_DAEMON}
+        {...props}
+        agent={next}
+        onBind={onBind}
+      />,
+    );
+  return { onBind, setAgent };
+}
+
 async function openSelect() {
   const user = userEvent.setup();
   await user.click(screen.getByRole("combobox", { name: "Run on my machine" }));
@@ -156,6 +188,81 @@ describe("RunOnMyMachine", () => {
     });
 
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+
+  it("keeps the owner's binding when switching between two CLIs on this machine", async () => {
+    // The common case once someone uses this row on their own agents: the agent
+    // owner, both local CLIs, and the person clicking are the same account. The
+    // second switch used to remember the CLI just left as if it were the
+    // owner's configuration, so the Runtime row silently followed this row.
+    const myDesktop = runtime("claude (my-desktop)", "user-me", {
+      daemon_id: OTHER_DAEMON,
+    });
+    const runtimes = [myDesktop, localClaude, localOpenCode];
+    const { onBind, setAgent } = renderSwitching({
+      agent: agentOn(myDesktop.id, "user-me"),
+      runtimes,
+    });
+
+    const user = await openSelect();
+    await user.click(await screen.findByRole("option", { name: /Claude/ }));
+    expect(onBind).toHaveBeenCalledWith(localClaude.id);
+
+    // The PATCH landed: the agent now runs the CLI on this machine.
+    setAgent(agentOn(localClaude.id, "user-me"));
+    await user.click(screen.getByRole("combobox", { name: "Run on my machine" }));
+    await user.click(await screen.findByRole("option", { name: /Opencode/ }));
+    expect(onBind).toHaveBeenLastCalledWith(localOpenCode.id);
+
+    // The Runtime row still has the owner's configuration to show.
+    expect(useAgentOwnerRuntimeStore.getState().entries["agent-1"]).toBe(myDesktop.id);
+    expect(
+      ownerConfiguredRuntimeId(
+        agentOn(localOpenCode.id, "user-me"),
+        runtimes,
+        THIS_DAEMON,
+        useAgentOwnerRuntimeStore.getState().entries["agent-1"] ?? null,
+      ),
+    ).toBe(myDesktop.id);
+  });
+
+  it("remembers a binding that lives on this machine", async () => {
+    // The owner configured the agent on this very laptop, so the pre-override
+    // binding is local too. It is still the value the Runtime row must keep.
+    const { onBind } = render({
+      agent: agentOn(localClaude.id, "user-me"),
+      runtimes: [localClaude, localOpenCode],
+    });
+    const user = await openSelect();
+
+    await user.click(await screen.findByRole("option", { name: /Opencode/ }));
+
+    expect(onBind).toHaveBeenCalledWith(localOpenCode.id);
+    expect(useAgentOwnerRuntimeStore.getState().entries["agent-1"]).toBe(localClaude.id);
+  });
+
+  it("remembers a binding owned by someone else", async () => {
+    // Agents are often bound to a shared workspace runtime. "The owner's
+    // configuration" is whatever it was, not specifically a runtime the owner
+    // registered, or the Runtime row would collapse onto this machine.
+    const shared = runtime("claude (studio-box)", "user-other", {
+      daemon_id: OTHER_DAEMON,
+    });
+    const runtimes = [shared, localClaude, localOpenCode];
+    const { onBind } = render({ agent: agentOn(shared.id, "user-me"), runtimes });
+    const user = await openSelect();
+
+    await user.click(await screen.findByRole("option", { name: /Opencode/ }));
+
+    expect(onBind).toHaveBeenCalledWith(localOpenCode.id);
+    expect(
+      ownerConfiguredRuntimeId(
+        agentOn(localOpenCode.id, "user-me"),
+        runtimes,
+        THIS_DAEMON,
+        useAgentOwnerRuntimeStore.getState().entries["agent-1"] ?? null,
+      ),
+    ).toBe(shared.id);
   });
 });
 
@@ -259,10 +366,11 @@ describe("switching back to the owner's machine", () => {
     expect(resolved?.id).toBe(ownerClaude.id);
   });
 
-  it("ignores a remembered runtime that is no longer the owner's", () => {
-    // Remembered entry points at a runtime that has since been rebound to a
-    // teammate, so restoring it would move the agent onto the wrong machine.
-    const rebound = runtime("pi (ubuntu)", "user-teammate", {
+  it("restores a remembered runtime a teammate owns", () => {
+    // Agents get bound to shared runtimes. That binding is the owner's
+    // configuration too, so it must come back — falling through to the owner's
+    // own runtime would move the agent to a machine nobody asked for.
+    const shared = runtime("pi (studio)", "user-teammate", {
       daemon_id: OTHER_DAEMON,
       provider: "pi",
       visibility: "public",
@@ -270,9 +378,27 @@ describe("switching back to the owner's machine", () => {
 
     const resolved = resolveOwnerRuntime(
       agentOn(localPi.id),
-      [rebound, ownerClaude, localPi],
+      [shared, ownerClaude, localPi],
       "user-me",
-      rebound.id,
+      shared.id,
+    );
+
+    expect(resolved?.id).toBe(shared.id);
+  });
+
+  it("ignores a remembered runtime this person may not bind", () => {
+    const privateTeammate = runtime("pi (ubuntu)", "user-teammate", {
+      daemon_id: OTHER_DAEMON,
+      provider: "pi",
+      visibility: "private",
+      shared_with: [],
+    });
+
+    const resolved = resolveOwnerRuntime(
+      agentOn(localPi.id),
+      [privateTeammate, ownerClaude, localPi],
+      "user-me",
+      privateTeammate.id,
     );
 
     expect(resolved?.id).toBe(ownerClaude.id);
@@ -334,14 +460,21 @@ describe("ownerConfiguredRuntimeId", () => {
     ).toBeNull();
   });
 
-  it("ignores a remembered runtime that no longer belongs to the owner", () => {
-    const reassigned = runtime("pi (ubuntu)", "user-teammate", {
+  it("shows a remembered runtime a teammate owns", () => {
+    const shared = runtime("pi (studio)", "user-teammate", {
       daemon_id: OTHER_DAEMON,
       provider: "pi",
       visibility: "public",
     });
     expect(
-      ownerConfiguredRuntimeId(agentOn(localClaude.id), [reassigned, localClaude], THIS_DAEMON, reassigned.id),
+      ownerConfiguredRuntimeId(agentOn(localClaude.id), [shared, localClaude], THIS_DAEMON, shared.id),
+    ).toBe(shared.id);
+  });
+
+  it("returns null when the remembered runtime is the one now running it", () => {
+    // Nothing was replaced, so there is no second configuration to show.
+    expect(
+      ownerConfiguredRuntimeId(agentOn(localClaude.id), [ownerPi, localClaude], THIS_DAEMON, localClaude.id),
     ).toBeNull();
   });
 });

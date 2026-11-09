@@ -95,10 +95,21 @@ export function RunOnMyMachine({
       if (ownerRuntime) onBind(ownerRuntime.id);
       return;
     }
-    // Remember what we are about to overwrite, but only while it is still the
-    // owner's binding — that is the value "Default" is supposed to restore.
+    // Remember what we are about to overwrite, so the Runtime row has something
+    // of the owner's to show and "Default" has an exact binding to go back to.
+    //
+    // Only while no override is in progress: switching from one CLI here to
+    // another is the same override continuing, and the remembered value is
+    // already the owner's. Remembering the CLI we are leaving — which happens
+    // whenever the person clicking also owns the agent — made this row rewrite
+    // the owner's configuration with the previous local choice, so the Runtime
+    // row appeared to change on its own a beat later.
     const current = runtimes.find((runtime) => runtime.id === agent.runtime_id);
-    if (current && current.owner_id === agent.owner_id) {
+    const overrideInProgress =
+      rememberedOwnerRuntimeId !== null &&
+      current !== undefined &&
+      current.daemon_id === localDaemonId;
+    if (current && !overrideInProgress) {
       rememberOwnerRuntime(agent.id, current.id);
     }
     onBind(next);
@@ -193,6 +204,12 @@ function StatusDot({ runtime }: { runtime: AgentRuntime }) {
  * (remembered, see useAgentOwnerRuntimeStore) and the "Run on my machine" row
  * shows where the work actually runs, so the two rows answer two different
  * questions instead of echoing each other.
+ *
+ * The remembered binding is whatever the agent was on before this device moved
+ * it, which is not necessarily a runtime the owner registered: an agent can be
+ * bound to a teammate's shared runtime. Requiring the remembered runtime to
+ * belong to the agent's owner hid exactly those overrides, leaving the row to
+ * fall back to the effective binding and appear to change by itself.
  */
 export function ownerConfiguredRuntimeId(
   agent: Agent,
@@ -204,7 +221,7 @@ export function ownerConfiguredRuntimeId(
   const effective = runtimes.find((runtime) => runtime.id === agent.runtime_id);
   if (!effective || effective.daemon_id !== localDaemonId) return null;
   const remembered = runtimes.find((runtime) => runtime.id === rememberedRuntimeId);
-  if (!remembered || remembered.owner_id !== agent.owner_id) return null;
+  if (!remembered || remembered.id === effective.id) return null;
   return remembered.id;
 }
 
@@ -225,6 +242,11 @@ function agentLabel(runtime: AgentRuntime): string {
  * a different machine, or an entry that no longer qualifies) does it fall back
  * to picking one of the owner's runtimes, which cannot know which agent CLI of
  * theirs the agent was on.
+ *
+ * Ownership is deliberately not part of the check: a shared runtime owned by a
+ * teammate is a legitimate thing for an agent to have been bound to. What
+ * matters is that the runtime still exists and that this person may bind it,
+ * which is what the server enforces too.
  */
 export function resolveOwnerRuntime(
   agent: Agent,
@@ -237,11 +259,7 @@ export function resolveOwnerRuntime(
 
   if (rememberedRuntimeId) {
     const remembered = runtimes.find((runtime) => runtime.id === rememberedRuntimeId);
-    if (
-      remembered &&
-      remembered.owner_id === ownerId &&
-      isRuntimeUsableForUser(remembered, currentUserId)
-    ) {
+    if (remembered && isRuntimeUsableForUser(remembered, currentUserId)) {
       return remembered;
     }
   }

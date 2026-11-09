@@ -15,9 +15,13 @@ import { defaultStorage } from "../platform/storage";
  * replaced, per agent.
  *
  * It is a hint, not authority: the caller only uses an entry while the runtime
- * still exists, still belongs to the agent's owner, and is still one this person
- * may bind. A stale entry therefore degrades instead of moving an agent onto a
- * machine that no longer applies.
+ * still exists and is still one this person may bind. A stale entry therefore
+ * degrades instead of moving an agent onto a machine that no longer applies.
+ *
+ * Writing is deliberately narrower than reading: an entry is only recorded
+ * while no override is in progress. Switching from one local CLI to another is
+ * the same override continuing, and the stored value is still the owner's —
+ * recording the CLI being left made the Runtime row follow this one.
  */
 export interface AgentOwnerRuntimeState {
   /** agentId -> runtimeId that was bound before this device overrode it. */
