@@ -96,7 +96,8 @@
     "fallback_runtime_local": "Local",
     "actions_aria": "Row actions",
     "task_count_one": "{{count}} run",
-    "task_count_other": "{{count}} runs"
+    "task_count_other": "{{count}} runs",
+    "my_machine": "My Machine"
   },
   "activity_tooltip": {
     "created_today": "Created today",
@@ -209,7 +210,11 @@
     "edit_description_title": "Edit description",
     "description_placeholder": "What does this agent do?",
     "save": "Save",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "run_on_my_machine": "Run on my machine",
+    "run_on_my_machine_row": "Run on my machine",
+    "run_on_owner_default": "Default (owner's machine)",
+    "runtime_owner_overridden_hint": "The owner's machine. Your machine runs this agent right now."
   },
   "overview": {
     "attention_title": "Runs need attention",

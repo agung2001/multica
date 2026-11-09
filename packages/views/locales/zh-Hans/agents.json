@@ -93,7 +93,8 @@
     "fallback_runtime_cloud": "云端",
     "fallback_runtime_local": "本地",
     "actions_aria": "行操作",
-    "task_count_other": "{{count}} 次运行"
+    "task_count_other": "{{count}} 次运行",
+    "my_machine": "我的机器"
   },
   "activity_tooltip": {
     "created_today": "今天创建",
@@ -200,7 +201,11 @@
     "edit_description_title": "编辑描述",
     "description_placeholder": "这个智能体做什么？",
     "save": "保存",
-    "cancel": "取消"
+    "cancel": "取消",
+    "run_on_my_machine": "在我的机器上运行",
+    "run_on_my_machine_row": "在我的机器上运行",
+    "run_on_owner_default": "默认（所有者机器）",
+    "runtime_owner_overridden_hint": "所有者的机器。当前由你的机器执行该智能体。"
   },
   "overview": {
     "attention_title": "需要处理的运行",

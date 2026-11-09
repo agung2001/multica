@@ -79,6 +79,12 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 export interface AgentListRow {
   agent: Agent;
   runtime: AgentRuntime | null;
+  /**
+   * True when the bound runtime is registered by this device's own daemon — the
+   * column then reads "My Machine" instead of echoing a machine name the reader
+   * has to recognise as their own laptop.
+   */
+  runtimeIsLocal: boolean;
   presence: AgentPresenceDetail | null;
   activity: AgentActivity | null;
   runCount: number;
@@ -179,9 +185,8 @@ import { AgentsIntro } from "./agents-intro";
 export { isAccessChangeReady };
 
 export interface AgentsPageProps {
-  /** Desktop-only daemon wiring, currently unused by the list (kept for
-   *  platform-layer compatibility; the runtime filter lists runtimes by
-   *  name rather than grouped machines). */
+  /** Desktop-only: the daemon this device runs. The Runtime column uses it to
+   *  label an agent bound here as "My Machine". Absent on web. */
   localDaemonId?: string | null;
   localMachineName?: string | null;
   hasLocalMachine?: boolean;
@@ -329,7 +334,16 @@ export function AccessCell({ row }: { row: AgentListRow }) {
   return <span className="min-w-0 truncate">{label}</span>;
 }
 
-function RuntimeCell({ row }: { row: AgentListRow }) {
+/** Is this runtime registered by the daemon running on this device? */
+function isLocalRuntime(
+  runtime: AgentRuntime | undefined,
+  localDaemonId: string | null | undefined,
+): boolean {
+  if (!runtime || !localDaemonId) return false;
+  return runtime.daemon_id === localDaemonId;
+}
+
+export function RuntimeCell({ row }: { row: AgentListRow }) {
   const { t } = useT("agents");
   if (!isAgentRuntimeBound(row.agent)) {
     return (
@@ -345,7 +359,15 @@ function RuntimeCell({ row }: { row: AgentListRow }) {
   return (
     <>
       <ProviderLogo provider={runtime.provider} className="h-3.5 w-3.5 shrink-0" />
-      <span className="min-w-0 truncate">{runtimeDisplayLabel(runtime)}</span>
+      {row.runtimeIsLocal ? (
+        // The machine name would only be read back as "that is my laptop" —
+        // say it, and keep the exact runtime in the tooltip for disambiguation.
+        <TruncatedTooltip content={runtimeDisplayLabel(runtime)}>
+          <span className="min-w-0 truncate">{t(($) => $.row.my_machine)}</span>
+        </TruncatedTooltip>
+      ) : (
+        <span className="min-w-0 truncate">{runtimeDisplayLabel(runtime)}</span>
+      )}
     </>
   );
 }
@@ -371,7 +393,7 @@ function LastActiveCell({ row }: { row: AgentListRow }) {
 
 // Page
 
-export function AgentsPage(_props: AgentsPageProps = {}) {
+export function AgentsPage({ localDaemonId = null }: AgentsPageProps = {}) {
   const { t } = useT("agents");
   const locale = useLocale();
   const wsId = useWorkspaceId();
@@ -476,6 +498,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
       return {
         agent,
         runtime: runtimesById.get(agent.runtime_id) ?? null,
+        runtimeIsLocal: isLocalRuntime(runtimesById.get(agent.runtime_id), localDaemonId),
         presence: presenceMap.get(agent.id) ?? null,
         activity,
         runCount: runCountsById.get(agent.id) ?? 0,
@@ -490,6 +513,7 @@ export function AgentsPage(_props: AgentsPageProps = {}) {
     scope,
     currentUser,
     runtimesById,
+    localDaemonId,
     membersById,
     presenceMap,
     activityMap,

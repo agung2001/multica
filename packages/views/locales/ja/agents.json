@@ -85,7 +85,8 @@
     "fallback_runtime_cloud": "クラウド",
     "fallback_runtime_local": "ローカル",
     "actions_aria": "行の操作",
-    "task_count_other": "{{count}} 件の実行"
+    "task_count_other": "{{count}} 件の実行",
+    "my_machine": "自分のマシン"
   },
   "activity_tooltip": {
     "created_today": "今日作成",
@@ -192,7 +193,11 @@
     "edit_description_title": "説明を編集",
     "description_placeholder": "このエージェントは何をしますか？",
     "save": "保存",
-    "cancel": "キャンセル"
+    "cancel": "キャンセル",
+    "run_on_my_machine": "自分のマシンで実行",
+    "run_on_my_machine_row": "自分のマシンで実行",
+    "run_on_owner_default": "既定（所有者のマシン）",
+    "runtime_owner_overridden_hint": "所有者のマシン。現在は自分のマシンで実行されています。"
   },
   "overview": {
     "attention_title": "対応が必要な実行",

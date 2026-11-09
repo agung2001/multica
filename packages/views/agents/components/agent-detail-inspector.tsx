@@ -33,9 +33,12 @@ import { NewChatPreview } from "./new-chat-preview";
 import { useConversationStartersFocus } from "./use-conversation-starters-focus";
 import { ModelPicker } from "./inspector/model-picker";
 import { RuntimePicker } from "./inspector/runtime-picker";
+import { RunOnMyMachine, ownerConfiguredRuntimeId } from "./inspector/run-on-my-machine";
 import { ThinkingSettingField } from "./inspector/thinking-prop-row";
 import { ServiceTierSettingField } from "./inspector/service-tier-setting-field";
 import { useExecutionControls } from "./inspector/use-execution-controls";
+import { useLocalDaemonStatus } from "../../platform/use-local-daemon-status";
+import { useAgentOwnerRuntimeStore } from "@multica/core/agents";
 
 interface InspectorProps {
   agent: Agent;
@@ -135,6 +138,23 @@ export function AgentDetailInspector({
       profileDraft.description.length <= AGENT_DESCRIPTION_MAX_LENGTH,
     isEqual: profileDraftsEqual,
   });
+
+  // Which runtimes live on this machine, for the "Run on my machine" row.
+  // Null on web, where that row has nothing to offer and stays hidden.
+  const { daemonId: localDaemonId } = useLocalDaemonStatus();
+  const rememberedOwnerRuntimeId = useAgentOwnerRuntimeStore(
+    (state) => state.entries[agent.id] ?? null,
+  );
+  const forgetOwnerRuntime = useAgentOwnerRuntimeStore((state) => state.forget);
+  // While this laptop is overriding the agent, the Runtime row keeps showing
+  // what the owner configured — otherwise moving the agent here would silently
+  // wipe the only record of it.
+  const overriddenOwnerRuntimeId = ownerConfiguredRuntimeId(
+    agent,
+    runtimes,
+    localDaemonId,
+    rememberedOwnerRuntimeId,
+  );
 
   const {
     qoderRuntime,
@@ -290,19 +310,44 @@ export function AgentDetailInspector({
             <SettingsCard>
               <SettingsRow
                 label={t(($) => $.inspector.prop_runtime)}
+                description={
+                  overriddenOwnerRuntimeId
+                    ? t(($) => $.inspector.runtime_owner_overridden_hint)
+                    : undefined
+                }
                 size="select-wide"
               >
                 <RuntimePicker
                   variant="field"
                   showLabel={false}
-                  value={agent.runtime_id}
+                  value={overriddenOwnerRuntimeId ?? agent.runtime_id}
                   runtimes={runtimeOptions}
                   members={members}
                   currentUserId={currentUserId}
                   canEdit={canEdit && !qoderRuntime}
-                  onChange={changeRuntime}
+                  onChange={(runtimeId) => {
+                    // Changing the owner's configuration ends the local
+                    // override: the agent goes back to what the owner picks.
+                    if (overriddenOwnerRuntimeId) forgetOwnerRuntime(agent.id);
+                    return changeRuntime(runtimeId);
+                  }}
                 />
               </SettingsRow>
+              {qoderRuntime ? null : (
+                <SettingsRow
+                  label={t(($) => $.inspector.run_on_my_machine_row)}
+                  size="select-wide"
+                >
+                  <RunOnMyMachine
+                    agent={agent}
+                    runtimes={runtimeOptions}
+                    currentUserId={currentUserId}
+                    canEdit={canEdit}
+                    localDaemonId={localDaemonId}
+                    onBind={changeRuntime}
+                  />
+                </SettingsRow>
+              )}
               {qoderRuntime ? null : (
                 <>
                   <SettingsRow

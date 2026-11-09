@@ -96,7 +96,8 @@
     "fallback_runtime_local": "Local",
     "actions_aria": "Actions de la ligne",
     "task_count_one": "{{count}} exécution",
-    "task_count_other": "{{count}} exécutions"
+    "task_count_other": "{{count}} exécutions",
+    "my_machine": "Ma machine"
   },
   "activity_tooltip": {
     "created_today": "Créé aujourd'hui",
@@ -209,7 +210,11 @@
     "edit_description_title": "Modifier la description",
     "description_placeholder": "Que fait cet agent ?",
     "save": "Enregistrer",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "run_on_my_machine": "Exécuter sur ma machine",
+    "run_on_my_machine_row": "Exécuter sur ma machine",
+    "run_on_owner_default": "Par défaut (machine du propriétaire)",
+    "runtime_owner_overridden_hint": "La machine du propriétaire. Votre machine exécute cet agent actuellement."
   },
   "overview": {
     "attention_title": "Des exécutions demandent votre attention",

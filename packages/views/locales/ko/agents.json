@@ -93,7 +93,8 @@
     "fallback_runtime_cloud": "클라우드",
     "fallback_runtime_local": "로컬",
     "actions_aria": "행 작업",
-    "task_count_other": "실행 {{count}}개"
+    "task_count_other": "실행 {{count}}개",
+    "my_machine": "내 컴퓨터"
   },
   "activity_tooltip": {
     "created_today": "오늘 생성됨",
@@ -200,7 +201,11 @@
     "edit_description_title": "설명 수정",
     "description_placeholder": "이 에이전트는 무엇을 하나요?",
     "save": "저장",
-    "cancel": "취소"
+    "cancel": "취소",
+    "run_on_my_machine": "내 컴퓨터에서 실행",
+    "run_on_my_machine_row": "내 컴퓨터에서 실행",
+    "run_on_owner_default": "기본(소유자 컴퓨터)",
+    "runtime_owner_overridden_hint": "소유자의 컴퓨터입니다. 현재 내 컴퓨터에서 실행 중입니다."
   },
   "overview": {
     "attention_title": "확인이 필요한 실행",
