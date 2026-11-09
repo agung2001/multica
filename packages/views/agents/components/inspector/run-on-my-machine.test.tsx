@@ -226,6 +226,37 @@ describe("RunOnMyMachine", () => {
     ).toBe(myDesktop.id);
   });
 
+  it("keeps the owner's binding across a settings remount", async () => {
+    // The path a person actually takes: configure, leave the page, come back,
+    // then change the dropdown again. Nothing may be re-recorded here.
+    const myDesktop = runtime("claude (my-desktop)", "user-me", {
+      daemon_id: OTHER_DAEMON,
+    });
+    const runtimes = [myDesktop, localClaude, localOpenCode];
+
+    render({ agent: agentOn(myDesktop.id, "user-me"), runtimes });
+    const user = await openSelect();
+    await user.click(await screen.findByRole("option", { name: /Claude/ }));
+    expect(useAgentOwnerRuntimeStore.getState().entries["agent-1"]).toBe(myDesktop.id);
+
+    // Leave the settings page and open it again.
+    cleanup();
+
+    render({ agent: agentOn(localClaude.id, "user-me"), runtimes });
+    const reopened = await openSelect();
+    await reopened.click(await screen.findByRole("option", { name: /Opencode/ }));
+
+    expect(useAgentOwnerRuntimeStore.getState().entries["agent-1"]).toBe(myDesktop.id);
+    expect(
+      ownerConfiguredRuntimeId(
+        agentOn(localOpenCode.id, "user-me"),
+        runtimes,
+        THIS_DAEMON,
+        useAgentOwnerRuntimeStore.getState().entries["agent-1"] ?? null,
+      ),
+    ).toBe(myDesktop.id);
+  });
+
   it("remembers a binding that lives on this machine", async () => {
     // The owner configured the agent on this very laptop, so the pre-override
     // binding is local too. It is still the value the Runtime row must keep.
