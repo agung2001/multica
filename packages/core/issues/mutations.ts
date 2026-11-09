@@ -26,6 +26,8 @@ import {
 } from "./cache-coordinator";
 import { issueChangedDims } from "./surface/membership";
 import { addIssueToBuckets } from "./cache-helpers";
+import { createLocalIssueIfBound } from "../local-issues/intercept";
+import { isLocalIssueId, localIssueRecord, useLocalIssuesStore } from "../local-issues/store";
 import {
   cleanupDeletedIssueCaches,
   collectDeletedIssueCacheMetadata,
@@ -172,7 +174,13 @@ function useIssueCreateMutation<TVariables>(
 }
 
 export function useCreateIssue() {
-  return useIssueCreateMutation((data: CreateIssueRequest) => api.createIssue(data));
+  const wsId = useWorkspaceId();
+  // An issue assigned to an agent that runs on this machine stays here: posting
+  // it would enqueue a task for a daemon that will never claim it.
+  return useIssueCreateMutation((data: CreateIssueRequest) => {
+    const local = createLocalIssueIfBound(wsId, data);
+    return local ? Promise.resolve(local) : api.createIssue(data);
+  });
 }
 
 export function useCreateCommentSubIssue() {
@@ -191,6 +199,21 @@ export function useUpdateIssue() {
   return useMutation({
     mutationKey: issueWriteMutationKey(wsId),
     mutationFn: ({ id, move_intent: moveIntent, ...data }: UpdateIssueMutationInput) => {
+      // A local issue has no server row; edits and status moves stay on the
+      // device, which is what keeps it private.
+      if (isLocalIssueId(id)) {
+        const local = localIssueRecord(id);
+        if (local) {
+          useLocalIssuesStore.getState().update(id, {
+            ...(typeof data.title === "string" ? { title: data.title } : {}),
+            ...(typeof data.description === "string" ? { description: data.description } : {}),
+            ...(data.status ? { status: data.status } : {}),
+            ...(data.priority ? { priority: data.priority } : {}),
+          });
+        }
+        if (local) return Promise.resolve(local.issue);
+        return api.updateIssue(id, data);
+      }
       if (!moveIntent) return api.updateIssue(id, data);
       const { position: _optimisticPosition, ...target } = data;
       return api.moveIssue(id, { ...target, ...moveIntent });

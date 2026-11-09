@@ -12,8 +12,7 @@
     "runtimes": "執行時",
     "skills": "Skills",
     "settings": "設定",
-    "views": "檢視",
-    "local_runs": "本機執行"
+    "views": "檢視"
   },
   "tab": {
     "issue": "任務",
@@ -140,8 +139,7 @@
       "view_remove": "從側欄移除",
       "view_rename": "重新命名",
       "view_duplicate": "建立副本",
-      "view_delete": "刪除檢視",
-      "local_runs": "本機執行"
+      "view_delete": "刪除檢視"
     },
     "team": {
       "new_agent": "新建 AI 代理",

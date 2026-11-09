@@ -21,7 +21,6 @@ import { MyIssuesPage } from "@multica/views/my-issues";
 import { SkillsPage } from "@multica/views/skills";
 import { DesktopRuntimesPage } from "./components/desktop-runtimes-page";
 import { DesktopAgentsPage } from "./components/desktop-agents-page";
-import { LocalRunsPage } from "@multica/views/local-runs";
 import {
   AiCreateAgentPage,
   ManualCreateAgentPage,
@@ -214,11 +213,6 @@ export const appRoutes: RouteObject[] = [
             handle: { title: "Skill" },
           },
           { path: "agents", element: <DesktopAgentsPage />, handle: { title: "Agents" } },
-          {
-            path: "local-runs",
-            element: <LocalRunsPage />,
-            handle: { title: "Local runs" },
-          },
           {
             path: "agents/new",
             element: <DesktopChooseRuntimePage />,

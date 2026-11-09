@@ -45,7 +45,9 @@ type RunOnMyMachineProps = {
  * This is a private preference stored on the device. It never writes to the
  * agent — the owner's runtime stays exactly as they configured it — because the
  * server routes every run to the agent's runtime and only the task pipeline can
- * change that. Local runs live on the local board instead.
+ * change that. Instead it marks the agent as one this device runs itself: an
+ * issue assigned to a bound agent is kept locally and is never sent to the
+ * server.
  */
 export function RunOnMyMachine({
   agent,

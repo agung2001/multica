@@ -12,8 +12,7 @@
     "runtimes": "ランタイム",
     "skills": "スキル",
     "settings": "設定",
-    "views": "ビュー",
-    "local_runs": "ローカル実行"
+    "views": "ビュー"
   },
   "tab": {
     "issue": "タスク",
@@ -140,8 +139,7 @@
       "view_remove": "サイドバーから削除",
       "view_rename": "名前を変更",
       "view_duplicate": "複製",
-      "view_delete": "ビューを削除",
-      "local_runs": "ローカル実行"
+      "view_delete": "ビューを削除"
     },
     "team": {
       "new_agent": "新規エージェント",

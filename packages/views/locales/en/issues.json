@@ -1867,5 +1867,15 @@
       "empty_title": "No saved views yet",
       "empty_description": "Set up filters and display options in an issue list, then save them as a view."
     }
+  },
+  "local_run": {
+    "title": "Runs on this machine",
+    "idle": "Not run yet",
+    "running": "Running",
+    "done": "Finished",
+    "failed": "Failed",
+    "stopped": "Stopped",
+    "run": "Run",
+    "stop": "Stop"
   }
 }

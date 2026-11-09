@@ -1867,5 +1867,15 @@
       "empty_title": "Aún no hay vistas guardadas",
       "empty_description": "Configura los filtros y las opciones de visualización de una lista de tareas y guárdalos como vista."
     }
+  },
+  "local_run": {
+    "title": "Se ejecuta en esta máquina",
+    "idle": "Sin ejecutar",
+    "running": "En curso",
+    "done": "Terminado",
+    "failed": "Fallido",
+    "stopped": "Detenido",
+    "run": "Ejecutar",
+    "stop": "Detener"
   }
 }

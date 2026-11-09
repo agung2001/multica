@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Issue, Project } from "@multica/core/types";
 import { projectListOptions } from "@multica/core/projects/queries";
 import { childIssueProgressOptions } from "@multica/core/issues/queries";
+import { useLocalIssuesStore } from "@multica/core/local-issues";
 import { issueSurfaceGanttOptions } from "@multica/core/issues/surface/repository";
 import type { IssueSurfaceQueryPlan } from "@multica/core/issues/surface/query-plan";
 import {
@@ -232,11 +233,26 @@ export function useIssueSurfaceData({
     }),
     [projectStatusById, relationContext, today, unreadIssueIDs, workingIssueIDs],
   );
-  const bucketedIssues = serverStatusBranches.enabled
-    ? serverStatusBranches.issues
-    : serverGroupBranches.enabled
-      ? serverGroupBranches.issues
-      : EMPTY_ISSUES;
+  // Issues that live only on this machine ride along with the server rows, so
+  // the ordinary board is the whole UI: no separate screen, no second list.
+  const localIssues = useLocalIssuesStore((state) => state.issues);
+  const localIssueRows = useMemo(
+    () =>
+      localIssues
+        .filter((entry) => entry.issue.workspace_id === wsId)
+        .map((entry) => entry.issue),
+    [localIssues, wsId],
+  );
+  const bucketedIssues = useMemo(() => {
+    const serverIssues = serverStatusBranches.enabled
+      ? serverStatusBranches.issues
+      : serverGroupBranches.enabled
+        ? serverGroupBranches.issues
+        : EMPTY_ISSUES;
+    return localIssueRows.length === 0
+      ? serverIssues
+      : [...serverIssues, ...localIssueRows];
+  }, [localIssueRows, serverGroupBranches.enabled, serverGroupBranches.issues, serverStatusBranches.enabled, serverStatusBranches.issues]);
 
   // Status branches already reflect the visible category set chosen by the
   // controller. Cancelled is hidden for a new view, but remains a first-class

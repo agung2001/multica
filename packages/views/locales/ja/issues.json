@@ -1798,5 +1798,15 @@
       "empty_title": "保存したビューはまだありません",
       "empty_description": "タスク一覧でフィルターと表示方法を調整し、ビューとして保存します。"
     }
+  },
+  "local_run": {
+    "title": "このマシンで実行",
+    "idle": "未実行",
+    "running": "実行中",
+    "done": "完了",
+    "failed": "失敗",
+    "stopped": "停止",
+    "run": "実行",
+    "stop": "停止"
   }
 }

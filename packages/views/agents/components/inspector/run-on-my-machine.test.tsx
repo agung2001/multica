@@ -75,7 +75,7 @@ async function openSelect() {
 
 afterEach(() => {
   cleanup();
-  useLocalRunsStore.setState({ runs: [], bindings: {} });
+  useLocalRunsStore.setState({ bindings: {} });
 });
 
 describe("RunOnMyMachine", () => {

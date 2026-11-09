@@ -12,8 +12,7 @@
     "runtimes": "런타임",
     "skills": "스킬",
     "settings": "설정",
-    "views": "뷰",
-    "local_runs": "로컬 실행"
+    "views": "뷰"
   },
   "tab": {
     "issue": "태스크",
@@ -140,8 +139,7 @@
       "view_remove": "사이드바에서 제거",
       "view_rename": "이름 변경",
       "view_duplicate": "복제",
-      "view_delete": "뷰 삭제",
-      "local_runs": "로컬 실행"
+      "view_delete": "뷰 삭제"
     },
     "team": {
       "new_agent": "새 에이전트",

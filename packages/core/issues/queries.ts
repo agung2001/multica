@@ -22,6 +22,7 @@ import type {
 import type { SidebarIssuesRequest } from "./sidebar-list";
 import { ALL_STATUSES } from "./config";
 import { issueColumnCategory } from "./status-category";
+import { localIssueRecord } from "../local-issues/store";
 
 export function issueTasksOptions(issueId: string) {
   return queryOptions({
@@ -516,7 +517,11 @@ export function sidebarIssuesOptions(
 export function issueDetailOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: issueKeys.detail(wsId, id),
-    queryFn: () => api.getIssue(id),
+    // A local issue has no server row to fetch; its record is the source.
+    queryFn: () => {
+      const local = localIssueRecord(id);
+      return local ? Promise.resolve(local.issue) : api.getIssue(id);
+    },
   });
 }
 
