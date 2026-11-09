@@ -55,11 +55,14 @@ jobs:
             # "release name:glob", space separated. Build output carries the git
             # version, but the release keeps one name per artifact so each run
             # replaces the previous binary instead of piling up versions.
-            assets: "multica-desktop-windows-x64.exe:*.exe"
-          - os: macos-14
+            assets: "multica-desktop-windows-x64.exe:.exe"
+          # macos-latest rather than a pinned label: the scheduler rejects
+          # macos-14 here ("configuration 'macos-14-arm64-us-default' is not
+          # supported"), and a rejected job cancels its matrix siblings.
+          - os: macos-latest
             flag: --mac
             arch: arm64
-            assets: "multica-desktop-mac-arm64.dmg:*.dmg multica-desktop-mac-arm64.zip:*.zip"
+            assets: "multica-desktop-mac-arm64.dmg:.dmg multica-desktop-mac-arm64.zip:.zip"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -99,11 +102,19 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p staged
+          echo "packaged output:"
+          ls -la apps/desktop/dist || true
+          # Build names carry the git version, so find by extension rather than
+          # by a glob the shell may or may not expand on Windows.
           for pair in ${{ matrix.assets }}; do
             name="${pair%%:*}"
-            pattern="${pair##*:}"
-            source_file=$(ls -1 apps/desktop/dist/"${pattern}" | head -n1)
-            cp "$source_file" "staged/${name}"
+            ext="${pair##*.}"
+            source_file=$(find apps/desktop/dist -maxdepth 1 -type f -name "*.${ext}" | sort | head -n1)
+            if [ -z "${source_file}" ]; then
+              echo "::error::no *.${ext} in apps/desktop/dist"
+              exit 1
+            fi
+            cp "${source_file}" "staged/${name}"
           done
           ls -lh staged
 
@@ -115,6 +126,8 @@ jobs:
 
   stamp:
     needs: build
+    # A failed platform must not hide a successful one's release notes.
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
