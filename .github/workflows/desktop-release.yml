@@ -1,0 +1,138 @@
+name: Desktop Release
+
+# Temporary CI for shipping the "run on my machine" build to teammates.
+#
+# Lives on this branch only, and checks out BUILD_REF — so the feature branch
+# needs no workflow file of its own and pushing there never triggers a build.
+# Every run replaces the assets on one rolling release (TAG): the newest run is
+# always what the download link serves.
+#
+# workflow_dispatch is declared for later, when this file reaches the default
+# branch; GitHub only exposes the dispatch button for workflows that live there.
+on:
+  push:
+    branches: [ci/windows-desktop-build]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  TAG: agent-run-on-my-machine
+  BUILD_REF: ${{ vars.BUILD_REF || 'feat/agent-run-on-my-machine' }}
+  GH_TOKEN: ${{ github.token }}
+
+# Two builds landing on the same release must not race each other.
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure the rolling release exists
+        run: |
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$BUILD_REF" \
+              --prerelease \
+              --title "Multica Desktop — run on my machine" \
+              --notes "Rolling build. Assets are replaced by every run."
+          fi
+
+  build:
+    needs: prepare
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            flag: --win
+            arch: x64
+            # "release name:glob", space separated. Build output carries the git
+            # version, but the release keeps one name per artifact so each run
+            # replaces the previous binary instead of piling up versions.
+            assets: "multica-desktop-windows-x64.exe:*.exe"
+          - os: macos-14
+            flag: --mac
+            arch: arm64
+            assets: "multica-desktop-mac-arm64.dmg:*.dmg multica-desktop-mac-arm64.zip:*.zip"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Package
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          VITE_API_URL: https://api.multica.ai
+          VITE_WS_URL: wss://api.multica.ai/ws
+          VITE_APP_URL: https://multica.ai
+        run: node scripts/package.mjs ${{ matrix.flag }} --${{ matrix.arch }} --publish never
+
+      - name: Stage the assets under stable names
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p staged
+          for pair in ${{ matrix.assets }}; do
+            name="${pair%%:*}"
+            pattern="${pair##*:}"
+            source_file=$(ls -1 apps/desktop/dist/"${pattern}" | head -n1)
+            cp "$source_file" "staged/${name}"
+          done
+          ls -lh staged
+
+      - name: Upload to the rolling release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" staged/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  stamp:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BUILD_REF }}
+          fetch-depth: 0
+
+      - name: Record what this build is
+        run: |
+          {
+            echo "Rolling build of \`$BUILD_REF\`."
+            echo
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| commit | \`$(git rev-parse --short HEAD)\` |"
+            echo "| built | $(date -u +%Y-%m-%dT%H:%MZ) |"
+            echo "| run | [#$GITHUB_RUN_NUMBER]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID) |"
+            echo
+            echo "Assets are replaced by every run. Unsigned: SmartScreen on Windows, Gatekeeper on macOS (right-click → Open)."
+          } > release-notes.md
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file release-notes.md
