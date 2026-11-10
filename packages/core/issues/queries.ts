@@ -22,16 +22,23 @@ import type {
 import type { SidebarIssuesRequest } from "./sidebar-list";
 import { ALL_STATUSES } from "./config";
 import { issueColumnCategory } from "./status-category";
-import { localIssueRecord, localIssueTasks, localIssueTimeline } from "../local-issues/store";
+import {
+  isLocalIssueReference,
+  localIssueRecord,
+  localIssueTasks,
+  localIssueTimeline,
+  waitForLocalIssuesHydrated,
+} from "../local-issues/store";
 
 export function issueTasksOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.tasks(issueId),
     // A local issue's runs live beside it on this device; there is no server
     // task row to list.
-    queryFn: () => {
-      const local = localIssueRecord(issueId);
-      return local ? Promise.resolve(localIssueTasks(local)) : api.listTasksByIssue(issueId);
+    queryFn: async () => {
+      if (!isLocalIssueReference(issueId)) return api.listTasksByIssue(issueId);
+      await waitForLocalIssuesHydrated();
+      return localIssueTasks(localIssueRecord(issueId));
     },
     enabled: !!issueId,
     staleTime: 30_000,
@@ -523,9 +530,12 @@ export function issueDetailOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: issueKeys.detail(wsId, id),
     // A local issue has no server row to fetch; its record is the source.
-    queryFn: () => {
+    queryFn: async () => {
+      if (!isLocalIssueReference(id)) return api.getIssue(id);
+      await waitForLocalIssuesHydrated();
       const local = localIssueRecord(id);
-      return local ? Promise.resolve(local.issue) : api.getIssue(id);
+      if (!local) throw new Error(`Local issue ${id} not found`);
+      return local.issue;
     },
   });
 }
@@ -590,7 +600,10 @@ export function childIssueProgressOptions(wsId: string) {
 export function issueDuplicatesOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: issueKeys.duplicates(wsId, id),
-    queryFn: () => api.listIssueDuplicates(id),
+    queryFn: () =>
+      isLocalIssueReference(id)
+        ? Promise.resolve({ duplicate_of: null, duplicates: [] })
+        : api.listIssueDuplicates(id),
     // Same reason as childIssuesOptions: a mark written while this workspace
     // is not the active realtime subscription would otherwise leave the
     // Infinity-stale snapshot wrong when the issue is opened again.
@@ -601,10 +614,10 @@ export function issueDuplicatesOptions(wsId: string, id: string) {
 export function childIssuesOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: issueKeys.children(wsId, id),
-    queryFn: () => {
-      const local = localIssueRecord(id);
-      return local ? Promise.resolve([]) : api.listChildIssues(id).then((r) => r.issues);
-    },
+    queryFn: () =>
+      isLocalIssueReference(id)
+        ? Promise.resolve([])
+        : api.listChildIssues(id).then((r) => r.issues),
     // Child creation can happen while this workspace is not the active
     // realtime subscription (for example, an agent creates it while a
     // desktop tab is showing another workspace). The global Infinity
@@ -694,9 +707,10 @@ export function issueTimelineOptions(issueId: string) {
     queryKey: issueKeys.timeline(issueId),
     // A local issue's comments are its timeline; no server request exists for
     // a row that was never posted.
-    queryFn: () => {
-      const local = localIssueRecord(issueId);
-      return local ? Promise.resolve(localIssueTimeline(local)) : api.listTimeline(issueId);
+    queryFn: async () => {
+      if (!isLocalIssueReference(issueId)) return api.listTimeline(issueId);
+      await waitForLocalIssuesHydrated();
+      return localIssueTimeline(localIssueRecord(issueId));
     },
   });
 }
@@ -705,8 +719,10 @@ export function issueReactionsOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.reactions(issueId),
     queryFn: async () => {
-      const local = localIssueRecord(issueId);
-      if (local) return local.issue.reactions ?? [];
+      if (isLocalIssueReference(issueId)) {
+        await waitForLocalIssuesHydrated();
+        return localIssueRecord(issueId)?.issue.reactions ?? [];
+      }
       const issue = await api.getIssue(issueId);
       return issue.reactions ?? [];
     },
@@ -716,17 +732,26 @@ export function issueReactionsOptions(issueId: string) {
 export function issueSubscribersOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.subscribers(issueId),
-    queryFn: () => {
-      const local = localIssueRecord(issueId);
-      return local ? Promise.resolve([]) : api.listIssueSubscribers(issueId);
-    },
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve([])
+        : api.listIssueSubscribers(issueId),
   });
 }
 
 export function issueUsageOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.usage(issueId),
-    queryFn: () => api.getIssueUsage(issueId),
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve({
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read_tokens: 0,
+            total_cache_write_tokens: 0,
+            task_count: 0,
+          })
+        : api.getIssueUsage(issueId),
   });
 }
 
@@ -737,9 +762,9 @@ export function issueUsageOptions(issueId: string) {
 export function issueAttachmentsOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.attachments(issueId),
-    queryFn: () => {
-      const local = localIssueRecord(issueId);
-      return local ? Promise.resolve([]) : api.listAttachments(issueId);
-    },
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve([])
+        : api.listAttachments(issueId),
   });
 }

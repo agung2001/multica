@@ -7,7 +7,6 @@ import {
   type TranscriptEvent,
 } from "../local-runs";
 import {
-  LOCAL_ISSUE_OUTPUT_LIMIT,
   localIssueRecord,
   localTaskRecord,
   useLocalIssuesStore,
@@ -68,32 +67,43 @@ export function startLocalIssueRun(
   if (!task) return false;
 
   // Every CLI on the list streams protocol JSON; the formatter is what turns
-  // it into the conversation the run block shows. Its events feed the same
-  // transcript shape the server uses, so tool calls and results stream into
-  // the ordinary run block instead of only appearing as arrows in the reply.
+  // it into the conversation the run block shows. Tool activity goes to the
+  // transcript, while the reply comment stays the final answer only — the same
+  // separation a server run has.
+  let formatted = "";
+  let reply = "";
+  let sawEvent = false;
   const formatter = createTranscriptFormatter({
-    onEvent: (event) => appendTranscript(issueId, task.id, event),
+    onEvent: (event) => {
+      sawEvent = true;
+      appendTranscript(issueId, task.id, event);
+      if (event.type === "tool_use") {
+        // The final result is the text after the last tool call, not the
+        // narration that preceded it.
+        reply = "";
+      } else if (event.type === "text") {
+        reply += event.content;
+      }
+    },
   });
-  let output = "";
-
-  const append = (text: string) => {
-    if (!text) return;
-    output += text;
-    if (output.length > LOCAL_ISSUE_OUTPUT_LIMIT) {
-      output = `…[earlier output dropped]\n${output.slice(-LOCAL_ISSUE_OUTPUT_LIMIT)}`;
-    }
-    useLocalIssuesStore.getState().appendTaskOutput(issueId, task.id, text);
-  };
 
   const handle = runner.start({
     argv,
     cwd: record.cwd,
     prompt,
-    onOutput: (chunk) => append(formatter.write(chunk)),
+    onOutput: (chunk) => {
+      formatted += formatter.write(chunk);
+    },
     onExit: (result) => {
       stops.delete(task.id);
       const stopped = stoppedByUser.delete(task.id);
-      append(formatter.finish());
+      formatted += formatter.finish();
+      // A plain-text CLI produces no structured events; its whole output is
+      // the answer. Structured runs only publish the final text segment.
+      const answer = sawEvent ? reply : formatted;
+      if (answer.trim()) {
+        useLocalIssuesStore.getState().appendTaskOutput(issueId, task.id, answer);
+      }
       const status = stopped
         ? "cancelled"
         : result.error || result.code !== 0
@@ -102,7 +112,7 @@ export function startLocalIssueRun(
       useLocalIssuesStore.getState().updateTask(issueId, task.id, {
         status,
         completed_at: new Date().toISOString(),
-        result: status === "completed" && output ? { comment: output } : null,
+        result: status === "completed" && answer.trim() ? { comment: answer } : null,
         error: stopped ? null : (result.error ?? null),
         failure_reason: status === "failed" ? "agent_error" : undefined,
         cancelled_by: stopped ? { type: "member" } : undefined,

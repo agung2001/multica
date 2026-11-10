@@ -7,6 +7,7 @@ import {
 import type { IssueWakeupInput, SystemWakeup, WorkspaceSystemWakeup, WorkspaceWakeupFilters } from "../types";
 import { api } from "../api";
 import { issueKeys } from "./queries";
+import { isLocalIssueReference } from "../local-issues/store";
 
 export function workspaceWakeupSummariesOptions(workspaceId: string) {
   return queryOptions({
@@ -20,7 +21,10 @@ export function workspaceWakeupSummariesOptions(workspaceId: string) {
 export function issueWakeupsOptions(workspaceId: string, issueId: string) {
   return queryOptions({
     queryKey: ["issue-wakeups", workspaceId, issueId],
-    queryFn: () => api.listIssueWakeups(issueId),
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve([])
+        : api.listIssueWakeups(issueId),
     enabled: !!workspaceId && !!issueId,
     refetchInterval: 10_000,
   });
@@ -29,7 +33,10 @@ export function issueWakeupsOptions(workspaceId: string, issueId: string) {
 export function issueSystemWakeupsOptions(workspaceId: string, issueId: string) {
   return queryOptions({
     queryKey: ["issue-system-wakeups", workspaceId, issueId],
-    queryFn: () => api.listIssueSystemWakeups(issueId),
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve([])
+        : api.listIssueSystemWakeups(issueId),
     enabled: !!workspaceId && !!issueId,
     refetchInterval: 10_000,
   });
@@ -84,7 +91,10 @@ export function useUpdateWorkspaceSystemWakeup(workspaceId: string) {
 export function issueWakeupRunsOptions(workspaceId: string, issueId: string, wakeupId: string) {
   return queryOptions({
     queryKey: ["issue-wakeup-runs", workspaceId, issueId, wakeupId],
-    queryFn: () => api.listIssueWakeupRuns(issueId, wakeupId),
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve([])
+        : api.listIssueWakeupRuns(issueId, wakeupId),
     enabled: !!workspaceId && !!issueId && !!wakeupId,
     staleTime: 10_000,
   });

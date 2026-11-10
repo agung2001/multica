@@ -1,5 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
+import { isLocalIssueReference } from "../local-issues/store";
 
 export const githubKeys = {
   all: (wsId: string) => ["github", wsId] as const,
@@ -35,6 +36,9 @@ export const githubInstallationRepositoriesOptions = (
 export const issuePullRequestsOptions = (issueId: string) =>
   queryOptions({
     queryKey: githubKeys.pullRequests(issueId),
-    queryFn: () => api.listIssuePullRequests(issueId),
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve({ pull_requests: [], auto_complete: null })
+        : api.listIssuePullRequests(issueId),
     enabled: !!issueId,
   });

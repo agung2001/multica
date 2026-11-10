@@ -196,6 +196,7 @@ describe("InlineCommentRun", () => {
     expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
     fireEvent.click(trigger);
     expect(screen.getByRole("dialog")).toHaveTextContent("Loading activity");
+    await waitFor(() => expect(api.listTaskMessages).toHaveBeenCalledTimes(1));
     await act(async () => resolve(messages));
     await screen.findByText("Full transcript");
     expect(api.listTaskMessages).toHaveBeenCalledTimes(1);

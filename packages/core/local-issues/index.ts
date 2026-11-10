@@ -1,6 +1,7 @@
 export {
   LOCAL_ISSUE_OUTPUT_LIMIT,
   isLocalIssueId,
+  isLocalIssueReference,
   isLocalTaskId,
   localIssueComments,
   localIssueId,
@@ -12,6 +13,7 @@ export {
   selectLocalIssues,
   useLocalIssuesStore,
   useLocalTaskMessages,
+  waitForLocalIssuesHydrated,
   type LocalIssue,
 } from "./store";
 export {

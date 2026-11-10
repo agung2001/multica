@@ -17,6 +17,11 @@ import {
 } from "@multica/core/chat/queries";
 import type { AgentTask } from "@multica/core/types/agent";
 import type { TaskMessagePayload } from "@multica/core/types/events";
+import {
+  isLocalTaskId,
+  localTaskMessages,
+  useLocalTaskMessages,
+} from "@multica/core/local-issues";
 import { AgentTranscriptDialog } from "./agent-transcript-dialog";
 import { buildTimeline, type TimelineItem } from "./build-timeline";
 
@@ -98,10 +103,19 @@ export function TranscriptButton({
   const open = controlledOpen ?? uncontrolledOpen;
   const setOpen = controlledOnOpenChange ?? setUncontrolledOpen;
 
+  // Local runs have no server transcript. Read the device store instead of
+  // falling through to a task id the backend has never seen.
+  const local = isLocalTaskId(task.id);
+  const localMessages = useLocalTaskMessages(local ? task.id : null);
+  const localItems = useMemo(
+    () => (local ? buildTimeline(localMessages) : undefined),
+    [local, localMessages],
+  );
+
   // Live cache mode: the running task feeds the shared task-messages cache, so
   // we render straight off that cache instead of a one-shot local snapshot.
   const liveCacheMode =
-    isLive && providedItems === undefined && isTaskMessageTaskId(task.id);
+    !local && isLive && providedItems === undefined && isTaskMessageTaskId(task.id);
 
   // Latch the live path for the duration of an open session. The parent flips
   // `isLive` to false the moment the task finishes; without the latch the
@@ -120,7 +134,7 @@ export function TranscriptButton({
   }, [liveCacheMode, open]);
 
   // Live mode renders from the cache; lazy/provided modes from local state.
-  const items = providedItems ?? loadedItems ?? [];
+  const items = providedItems ?? localItems ?? loadedItems ?? [];
 
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -128,15 +142,19 @@ export function TranscriptButton({
       e.stopPropagation();
       const keyboard = e.detail === 0;
       setFromKeyboard(keyboard);
+      const openTerminal = (timeline: TimelineItem[]) => {
+        if (onOpenTranscript) onOpenTranscript(timeline, keyboard);
+        else setOpen(true, keyboard);
+      };
+      if (local) {
+        openTerminal(localItems ?? buildTimeline(localTaskMessages(task.id)));
+        return;
+      }
       if (liveCacheMode) {
         setLiveSession(true);
         setOpen(true, keyboard);
         return;
       }
-      const openTerminal = (timeline: TimelineItem[]) => {
-        if (onOpenTranscript) onOpenTranscript(timeline, keyboard);
-        else setOpen(true, keyboard);
-      };
       if (providedItems !== undefined || loadedItems !== null) {
         openTerminal(providedItems ?? loadedItems ?? []);
         return;
@@ -156,7 +174,7 @@ export function TranscriptButton({
         })
         .finally(() => setLoading(false));
     },
-    [liveCacheMode, providedItems, loadedItems, setOpen, task.id, onOpenTranscript],
+    [local, localItems, liveCacheMode, providedItems, loadedItems, setOpen, task.id, onOpenTranscript],
   );
 
   useEffect(() => {

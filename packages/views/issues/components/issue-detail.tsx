@@ -190,7 +190,7 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import { MetadataSection } from "./metadata-section";
 import { IssueSidebarSectionHeader, IssueSidebarStack, IssueSidebarPropertyGrid } from "./issue-sidebar-section";
 import { useT } from "../../i18n";
-import { isLocalIssueId, useLocalIssuesStore } from "@multica/core/local-issues";
+import { isLocalIssueReference, useLocalIssuesStore } from "@multica/core/local-issues";
 import { useIssueDetailScrollRestore } from "../hooks/use-issue-detail-scroll-restore";
 import { useJumpToLatest } from "../hooks/use-jump-to-latest";
 import { useInPageFind } from "../hooks/use-in-page-find";
@@ -1398,10 +1398,10 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const wsId = useWorkspaceId();
   // A local issue lives in this device's storage: anything the sidebar loads
   // from the server for it will only fail.
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   const localTasks = useLocalIssuesStore((state) =>
     isLocal
-      ? state.issues.find((entry) => entry.issue.id === issueId)?.tasks ?? EMPTY_LOCAL_TASKS
+      ? state.issues.find((entry) => entry.issue.id === issueId || entry.issue.identifier === issueId)?.tasks ?? EMPTY_LOCAL_TASKS
       : EMPTY_LOCAL_TASKS,
   );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
@@ -1633,8 +1633,9 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   });
   const { data: issue = null, isLoading: issueLoading, refetch: refetchIssue } = issueQuery;
   const issueReadState = useIssueReadState(wsId, id, issueQuery);
-  useMarkIssueReadWhileViewing(wsId, issue?.id ?? "");
-  useMarkIssueInboxReadWhileViewing(wsId, issue?.id ?? "", readsInbox);
+  // Local issues never enter the server unread/inbox tables.
+  useMarkIssueReadWhileViewing(wsId, isLocal ? "" : issue?.id ?? "");
+  useMarkIssueInboxReadWhileViewing(wsId, isLocal ? "" : issue?.id ?? "", readsInbox);
   const descriptionSourceId = `description:${id}`;
   const descriptionAnnotations = useCommentAnnotations({
     draftKey: `new:${id}`,
@@ -2654,7 +2655,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   const handleUpdateField = actions.updateField;
   const showInSidebar = useShowInSidebar(issue);
   // The inbox passes `onDone` and owns archive and restore there.
-  const archivedInboxItemId = useArchivedInboxItemId(id, !onDone);
+  const archivedInboxItemId = useArchivedInboxItemId(id, !onDone && !isLocal);
 
   // Labels live in their own query (not on the issue body) — fetch the count
   // here so seeding can decide whether the "Labels" optional row should be

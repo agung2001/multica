@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { issueKeys } from "@multica/core/issues/queries";
-import { isLocalIssueId } from "@multica/core/local-issues";
+import { isLocalIssueReference } from "@multica/core/local-issues";
 import { parseMentions } from "@multica/core/issues/comment-trigger-outcomes";
 import type { CommentTriggerPreviewAgent, CommentTriggerOutcome } from "@multica/core/types";
 
@@ -93,7 +93,7 @@ export function useCommentTriggerPreview({
   editingCommentId?: string;
   content: string;
 }): UseCommentTriggerPreviewResult {
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   const signature = useMemo(() => commentTriggerPreviewSignature(content), [content]);
   const hasAllMembersMention = useMemo(
     () => parseMentions(content).some(({ type, id }) => type === "all" && id === "all"),

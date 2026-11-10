@@ -100,8 +100,8 @@ describe("local issue runs", () => {
     );
 
     let record = useLocalIssuesStore.getState().issues[0]!;
-    expect(record.comments[0]?.content).toContain("→ bash");
-    expect(record.comments[0]?.content).toContain("$ ls -la");
+    // Tool activity does not become the reply; it stays in the run transcript.
+    expect(record.comments).toHaveLength(0);
     expect(record.messages).toHaveLength(1);
     expect(record.messages[0]).toMatchObject({
       type: "tool_use",
@@ -119,6 +119,13 @@ describe("local issue runs", () => {
         result: "file.txt",
       })}\n`,
     );
+    emitOutput?.(
+      "run-1",
+      `${JSON.stringify({
+        type: "message_update",
+        assistantMessageEvent: { type: "text_delta", delta: "Found it." },
+      })}\n`,
+    );
     emitExit?.("run-1", { code: 0 });
 
     record = useLocalIssuesStore.getState().issues[0]!;
@@ -128,6 +135,13 @@ describe("local issue runs", () => {
       output: "file.txt",
       call_id: "call-1",
     });
+    expect(record.messages[2]).toMatchObject({
+      type: "text",
+      content: "Found it.",
+    });
+    expect(record.comments).toHaveLength(1);
+    expect(record.comments[0]?.content).toBe("Found it.");
     expect(record.tasks[0]?.status).toBe("completed");
+    expect(record.tasks[0]?.result).toEqual({ comment: "Found it." });
   });
 });

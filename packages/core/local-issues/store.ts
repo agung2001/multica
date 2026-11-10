@@ -156,6 +156,42 @@ export function isLocalIssueId(id: string): boolean {
   return id.startsWith("local-");
 }
 
+/**
+ * A local issue id or its `LOCAL-N` identifier.
+ *
+ * Routes can carry either form, and lookups like `localIssueRecord` accept
+ * both. Server calls must be skipped before hydration for both.
+ */
+export function isLocalIssueReference(idOrIdentifier: string): boolean {
+  return isLocalIssueId(idOrIdentifier) || /^LOCAL-\d+$/.test(idOrIdentifier);
+}
+
+function matchesIssue(entry: LocalIssue, idOrIdentifier: string): boolean {
+  return entry.issue.id === idOrIdentifier || entry.issue.identifier === idOrIdentifier;
+}
+
+/**
+ * Wait until the persisted device issues are loaded.
+ *
+ * A local route can render before Zustand's async storage rehydration finishes.
+ * Any query that decides "local" by looking up the record would then miss it
+ * and hit the server with an id that was never posted. Waiting turns that race
+ * into a slightly delayed local read instead of a 404.
+ */
+export function waitForLocalIssuesHydrated(): Promise<void> {
+  if (useLocalIssuesStore.persist.hasHydrated()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = useLocalIssuesStore.persist.onFinishHydration(() => {
+      unsubscribe();
+      resolve();
+    });
+    if (useLocalIssuesStore.persist.hasHydrated()) {
+      unsubscribe();
+      resolve();
+    }
+  });
+}
+
 export const useLocalIssuesStore = create<LocalIssuesState>()(
   persist(
     (set, get) => ({
@@ -209,7 +245,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       update: (id, patch) =>
         set((state) => ({
           issues: state.issues.map((entry) =>
-            entry.issue.id === id
+            matchesIssue(entry, id)
               ? {
                   ...entry,
                   issue: {
@@ -224,20 +260,20 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       updateRun: (id, patch) =>
         set((state) => ({
           issues: state.issues.map((entry) =>
-            entry.issue.id === id ? { ...entry, ...patch } : entry,
+            matchesIssue(entry, id) ? { ...entry, ...patch } : entry,
           ),
         })),
       remove: (id) =>
         set((state) => ({
-          issues: state.issues.filter((entry) => entry.issue.id !== id),
+          issues: state.issues.filter((entry) => !matchesIssue(entry, id)),
         })),
       addComment: (id, input) => {
-        const entry = get().issues.find((candidate) => candidate.issue.id === id);
+        const entry = get().issues.find((candidate) => matchesIssue(candidate, id));
         if (!entry) return null;
         const now = nowIso();
         const comment: Comment = {
           id: crypto.randomUUID(),
-          issue_id: id,
+          issue_id: entry.issue.id,
           author_type: input.authorType,
           author_id: input.authorId,
           content: input.content,
@@ -254,7 +290,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         };
         set((state) => ({
           issues: state.issues.map((candidate) =>
-            candidate.issue.id === id
+            matchesIssue(candidate, id)
               ? { ...candidate, comments: [...candidate.comments, comment] }
               : candidate,
           ),
@@ -265,7 +301,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         let updated: Comment | null = null;
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             return {
               ...entry,
               comments: entry.comments.map((comment) => {
@@ -281,7 +317,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       deleteComment: (id, commentId) =>
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             const removed = new Set([commentId]);
             let changed = true;
             while (changed) {
@@ -306,7 +342,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       setCommentResolved: (id, commentId, resolved, actorId) =>
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             return {
               ...entry,
               comments: entry.comments.map((comment) =>
@@ -327,7 +363,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         let result: Reaction | null = null;
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             return {
               ...entry,
               comments: entry.comments.map((comment) => {
@@ -359,14 +395,14 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         return result;
       },
       createTask: (id, input) => {
-        const entry = get().issues.find((candidate) => candidate.issue.id === id);
+        const entry = get().issues.find((candidate) => matchesIssue(candidate, id));
         if (!entry) return null;
         const now = nowIso();
         const task: AgentTask = {
           id: crypto.randomUUID(),
           agent_id: input.agentId,
           runtime_id: input.runtimeId,
-          issue_id: id,
+          issue_id: entry.issue.id,
           status: input.status ?? "running",
           priority: 0,
           dispatched_at: now,
@@ -384,7 +420,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         };
         set((state) => ({
           issues: state.issues.map((candidate) =>
-            candidate.issue.id === id
+            matchesIssue(candidate, id)
               ? { ...candidate, tasks: [...candidate.tasks, task] }
               : candidate,
           ),
@@ -394,7 +430,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       updateTask: (id, taskId, patch) =>
         set((state) => ({
           issues: state.issues.map((entry) =>
-            entry.issue.id === id
+            matchesIssue(entry, id)
               ? {
                   ...entry,
                   tasks: entry.tasks.map((task) =>
@@ -408,7 +444,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
         if (!chunk) return;
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             let existed = false;
             const comments = entry.comments.map((comment) => {
               if (
@@ -428,7 +464,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
             const now = nowIso();
             const comment: Comment = {
               id: crypto.randomUUID(),
-              issue_id: id,
+              issue_id: entry.issue.id,
               author_type: "agent",
               author_id: entry.agentId,
               content: capOutput(chunk),
@@ -450,7 +486,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
       appendTaskMessage: (id, taskId, message) => {
         set((state) => ({
           issues: state.issues.map((entry) => {
-            if (entry.issue.id !== id) return entry;
+            if (!matchesIssue(entry, id)) return entry;
             const previous = entry.messages.at(-1);
             // Text and thinking arrive token by token. Folding adjacent
             // fragments keeps a long answer from becoming thousands of rows;
@@ -485,7 +521,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
                 {
                   ...message,
                   task_id: taskId,
-                  issue_id: id,
+                  issue_id: entry.issue.id,
                   seq,
                   created_at: message.created_at ?? nowIso(),
                 },
@@ -522,9 +558,7 @@ export function selectLocalIssues(issues: LocalIssue[], wsId: string): Issue[] {
 export function localIssueRecord(idOrIdentifier: string): LocalIssue | null {
   return (
     useLocalIssuesStore.getState().issues.find(
-      (entry) =>
-        entry.issue.id === idOrIdentifier ||
-        entry.issue.identifier === idOrIdentifier,
+      (entry) => matchesIssue(entry, idOrIdentifier),
     ) ?? null
   );
 }
@@ -570,13 +604,12 @@ export function isLocalTaskId(taskId: string): boolean {
 
 export function localIssueTimeline(record: LocalIssue | null): TimelineEntry[] {
   if (!record) return [];
+  // Comments are appended in insertion order. Timestamps can collide (two
+  // writes in one millisecond, or an edited reply), so a stable sort keeps
+  // that order instead of falling back to a random UUID comparison.
   return record.comments
     .map(commentToTimelineEntry)
-    .sort((left, right) =>
-      left.created_at === right.created_at
-        ? left.id.localeCompare(right.id)
-        : left.created_at.localeCompare(right.created_at),
-    );
+    .sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
 export function localIssueTasks(record: LocalIssue | null): AgentTask[] {

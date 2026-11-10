@@ -27,7 +27,7 @@ import {
 import { issueChangedDims } from "./surface/membership";
 import { addIssueToBuckets } from "./cache-helpers";
 import { createLocalIssueIfBound } from "../local-issues/intercept";
-import { isLocalIssueId, localIssueRecord, useLocalIssuesStore } from "../local-issues/store";
+import { isLocalIssueReference, localIssueRecord, useLocalIssuesStore } from "../local-issues/store";
 import {
   autoRunLocalIssue,
   retryLocalIssueRun,
@@ -159,7 +159,7 @@ function useIssueCreateMutation<TVariables>(
       // requiring the user to open it first.
       useRecentIssuesStore.getState().recordVisit(wsId, newIssue.id);
       // A local issue is not a server row; keep it out of server list caches.
-      if (isLocalIssueId(newIssue.id)) return;
+      if (isLocalIssueReference(newIssue.id)) return;
       for (const [key, data] of qc.getQueriesData<ListIssuesCache>({ queryKey: issueKeys.list(wsId) })) {
         if (data) qc.setQueryData<ListIssuesCache>(key, addIssueToBuckets(data, newIssue));
       }
@@ -170,7 +170,7 @@ function useIssueCreateMutation<TVariables>(
       }
     },
     onSettled: (newIssue) => {
-      if (newIssue && isLocalIssueId(newIssue.id)) return;
+      if (newIssue && isLocalIssueReference(newIssue.id)) return;
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.flatAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
@@ -215,7 +215,7 @@ export function useUpdateIssue() {
     mutationFn: ({ id, move_intent: moveIntent, ...data }: UpdateIssueMutationInput) => {
       // A local issue has no server row; edits and status moves stay on the
       // device, which is what keeps it private.
-      if (isLocalIssueId(id)) {
+      if (isLocalIssueReference(id)) {
         const local = localIssueRecord(id);
         if (local) {
           useLocalIssuesStore.getState().update(id, {
@@ -233,7 +233,7 @@ export function useUpdateIssue() {
       return api.moveIssue(id, { ...target, ...moveIntent });
     },
     onMutate: ({ id, move_intent: _moveIntent, ...data }) => {
-      if (isLocalIssueId(id)) return undefined;
+      if (isLocalIssueReference(id)) return undefined;
       // suppress_run is a write-time control field, not an Issue column.
       // description_base is merge metadata, while description itself
       // is resolved against that base on the server and therefore is not safe
@@ -321,7 +321,7 @@ export function useUpdateIssue() {
       return { change, prevChildren, parentId, id, inboxWrite };
     },
     onError: (_err, vars, ctx) => {
-      if (isLocalIssueId(vars.id)) return;
+      if (isLocalIssueReference(vars.id)) return;
       if (ctx) {
         rollbackIssueChange(qc, wsId, ctx.id, ctx.change);
       }
@@ -343,7 +343,7 @@ export function useUpdateIssue() {
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
     },
     onSuccess: (serverIssue, vars) => {
-      if (isLocalIssueId(vars.id)) return;
+      if (isLocalIssueReference(vars.id)) return;
       // Reconcile with the authoritative server entity by patching the one card
       // in place — NOT by invalidating + refetching the list. The list refetch
       // is what made a successful move flicker: the optimistic card was already
@@ -394,7 +394,7 @@ export function useUpdateIssue() {
       invalidateStaleListKeys(qc, reconcile.staleKeys);
     },
     onSettled: (_data, err, vars, ctx) => {
-      if (isLocalIssueId(vars.id)) return;
+      if (isLocalIssueReference(vars.id)) return;
       settleInboxAfterIssueWrite(qc, wsId, ctx?.inboxWrite, err !== null);
       // The issue's own list + detail caches are reconciled surgically in
       // onSuccess / onError, so they are deliberately NOT invalidated here — a
@@ -465,7 +465,7 @@ export function useDeleteIssue() {
     mutationFn: (id: string) => {
       // A local issue is not on the server, so deleting it is a local removal;
       // asking the API would answer "issue not found".
-      if (isLocalIssueId(id)) {
+      if (isLocalIssueReference(id)) {
         const local = localIssueRecord(id);
         for (const task of local?.tasks ?? []) {
           if (["queued", "dispatched", "running", "waiting_local_directory"].includes(task.status)) {
@@ -478,7 +478,7 @@ export function useDeleteIssue() {
       return api.deleteIssue(id);
     },
     onMutate: async (id) => {
-      if (isLocalIssueId(id)) return undefined;
+      if (isLocalIssueReference(id)) return undefined;
       await Promise.all([
         qc.cancelQueries({ queryKey: issueKeys.list(wsId) }),
         qc.cancelQueries({ queryKey: issueKeys.myAll(wsId) }),
@@ -520,7 +520,7 @@ export function useDeleteIssue() {
       };
     },
     onError: (_err, id, ctx) => {
-      if (isLocalIssueId(id)) return;
+      if (isLocalIssueReference(id)) return;
       if (ctx?.prevLists) {
         for (const [key, snapshot] of ctx.prevLists) {
           qc.setQueryData(key, snapshot);
@@ -547,11 +547,11 @@ export function useDeleteIssue() {
     },
     onSuccess: (_data, id, ctx) => {
       useRecentContextStore.getState().forgetContext(wsId, { type: "issue", id });
-      if (isLocalIssueId(id)) return;
+      if (isLocalIssueReference(id)) return;
       cleanupDeletedIssueCaches(qc, wsId, id, ctx?.metadata);
     },
     onSettled: (_data, _err, id, ctx) => {
-      if (isLocalIssueId(id)) return;
+      if (isLocalIssueReference(id)) return;
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.flatAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
@@ -899,7 +899,7 @@ type TimelineCache = TimelineEntry[];
 export function useCreateComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationFn: ({
       content,
@@ -991,7 +991,7 @@ export function useCreateComment(issueId: string) {
 export function useUpdateComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationFn: ({
       commentId,
@@ -1056,7 +1056,7 @@ export function useUpdateComment(issueId: string) {
 export function useDeleteComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     // The capability is read when the delete runs, so the route matches the
     // copy the confirmation showed. Older servers delete the replies too.
@@ -1141,7 +1141,7 @@ function collectThreadCommentIds(
 
 export function useResolveComment(issueId: string) {
   const qc = useQueryClient();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationFn: ({ commentId, resolved }: { commentId: string; resolved: boolean }) => {
       if (isLocal) {
@@ -1194,7 +1194,7 @@ export function useResolveComment(issueId: string) {
 
 export function useToggleCommentReaction(issueId: string) {
   const qc = useQueryClient();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationKey: ["toggleCommentReaction", issueId] as const,
     mutationFn: async ({
@@ -1347,7 +1347,7 @@ export function useUnsubscribeFromIssueSubtree(issueId: string) {
 
 export function useCancelIssueRun(issueId: string) {
   const client = useQueryClient();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationFn: async (taskId: string) => {
       if (isLocal) {
@@ -1377,7 +1377,7 @@ export function useRetryTaskSupplement(issueId: string) {
 
 export function useRetryIssueRun(issueId: string) {
   const client = useQueryClient();
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   return useMutation({
     mutationFn: async (taskId: string) => {
       if (isLocal) {

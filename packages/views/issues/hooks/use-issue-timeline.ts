@@ -27,7 +27,7 @@ import {
   issueKeys,
 } from "@multica/core/issues/queries";
 import {
-  isLocalIssueId,
+  isLocalIssueReference,
   localIssueTimeline,
   useLocalIssuesStore,
 } from "@multica/core/local-issues";
@@ -123,12 +123,12 @@ export function useIssueTimeline(issueId: string, userId?: string) {
   const { t } = useT("issues");
   const qc = useQueryClient();
 
-  const isLocal = isLocalIssueId(issueId);
+  const isLocal = isLocalIssueReference(issueId);
   // Local comments are the timeline and live in the device store. Subscribing
   // here is what makes a streamed agent reply repaint through the ordinary
   // comment cards, without a second local-only timeline component.
   const localRecord = useLocalIssuesStore((state) =>
-    isLocal ? state.issues.find((entry) => entry.issue.id === issueId) ?? null : null,
+    isLocal ? state.issues.find((entry) => entry.issue.id === issueId || entry.issue.identifier === issueId) ?? null : null,
   );
   const query = useQuery({
     ...issueTimelineOptions(issueId),

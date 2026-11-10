@@ -6,6 +6,7 @@ import {
   localTaskMessages,
   localTaskRecord,
   useLocalTaskMessages,
+  waitForLocalIssuesHydrated,
 } from "../local-issues/store";
 import type { TaskMessagePayload } from "../types/events";
 import type {
@@ -205,17 +206,20 @@ export function chatDraftRestoresOptions(sessionId: string) {
  * `task:message` events seed this cache in real time via useRealtimeSync.
  */
 export function taskMessagesOptions(taskId: string) {
-  const local = localTaskRecord(taskId) !== null;
   return queryOptions({
     queryKey: chatKeys.taskMessages(taskId),
     // Local runs have no server transcript table. Their messages live in the
     // device store, in the same shape, so the ordinary run block can render
-    // tool calls and results while the process is still alive.
-    queryFn: () =>
-      local
-        ? Promise.resolve(localTaskMessages(taskId))
-        : api.listTaskMessages(taskId),
-    enabled: isTaskMessageTaskId(taskId) || local,
+    // tool calls and results while the process is still alive. Wait for the
+    // store before deciding: a local task opened during rehydration must not
+    // fall through to the server, where its id does not exist.
+    queryFn: async () => {
+      await waitForLocalIssuesHydrated();
+      return localTaskRecord(taskId)
+        ? localTaskMessages(taskId)
+        : api.listTaskMessages(taskId);
+    },
+    enabled: isTaskMessageTaskId(taskId) || isLocalTaskId(taskId),
     staleTime: Infinity,
     // Every write to this cache — this fetch, a backfill, or a realtime batch —
     // folds into what is already there instead of replacing it. Without this a

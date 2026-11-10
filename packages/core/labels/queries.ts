@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 import { api } from "../api";
 import type { LabelResourceType } from "../types";
-import { localIssueRecord } from "../local-issues/store";
+import { isLocalIssueReference } from "../local-issues/store";
 
 export const labelKeys = {
   all: (wsId: string) => ["labels", wsId] as const,
@@ -39,10 +39,10 @@ export function resourceLabelsOptions(
 export function issueLabelsOptions(wsId: string, issueId: string) {
   return queryOptions({
     queryKey: labelKeys.byIssue(wsId, issueId),
-    queryFn: () => {
-      const local = localIssueRecord(issueId);
-      return local ? Promise.resolve({ labels: [] }) : api.listLabelsForIssue(issueId);
-    },
+    queryFn: () =>
+      isLocalIssueReference(issueId)
+        ? Promise.resolve({ labels: [] })
+        : api.listLabelsForIssue(issueId),
     select: (data) => data.labels,
     enabled: Boolean(issueId),
   });
