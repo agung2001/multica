@@ -1,6 +1,11 @@
 "use client";
 
-import { createTranscriptFormatter, localRunRunner, splitCommandLine } from "../local-runs";
+import {
+  createTranscriptFormatter,
+  localRunRunner,
+  splitCommandLine,
+  type TranscriptEvent,
+} from "../local-runs";
 import {
   LOCAL_ISSUE_OUTPUT_LIMIT,
   localIssueRecord,
@@ -63,8 +68,12 @@ export function startLocalIssueRun(
   if (!task) return false;
 
   // Every CLI on the list streams protocol JSON; the formatter is what turns
-  // it into the conversation the run block shows.
-  const formatter = createTranscriptFormatter();
+  // it into the conversation the run block shows. Its events feed the same
+  // transcript shape the server uses, so tool calls and results stream into
+  // the ordinary run block instead of only appearing as arrows in the reply.
+  const formatter = createTranscriptFormatter({
+    onEvent: (event) => appendTranscript(issueId, task.id, event),
+  });
   let output = "";
 
   const append = (text: string) => {
@@ -103,6 +112,37 @@ export function startLocalIssueRun(
 
   stops.set(task.id, handle.stop);
   return true;
+}
+
+function appendTranscript(
+  issueId: string,
+  taskId: string,
+  event: TranscriptEvent,
+): void {
+  const store = useLocalIssuesStore.getState();
+  if (event.type === "text" || event.type === "thinking" || event.type === "error") {
+    store.appendTaskMessage(issueId, taskId, {
+      type: event.type,
+      content: event.content,
+    });
+    return;
+  }
+  if (event.type === "tool_use") {
+    store.appendTaskMessage(issueId, taskId, {
+      type: "tool_use",
+      tool: event.tool,
+      input: event.input,
+      call_id: event.callId,
+    });
+    return;
+  }
+  store.appendTaskMessage(issueId, taskId, {
+    type: "tool_result",
+    tool: event.tool,
+    output: event.output,
+    call_id: event.callId,
+    output_truncated: event.output_truncated,
+  });
 }
 
 export function stopLocalIssueRun(taskId: string): void {

@@ -7,9 +7,11 @@ export {
   localIssueRecord,
   localIssueTasks,
   localIssueTimeline,
+  localTaskMessages,
   localTaskRecord,
   selectLocalIssues,
   useLocalIssuesStore,
+  useLocalTaskMessages,
   type LocalIssue,
 } from "./store";
 export {

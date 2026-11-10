@@ -81,4 +81,53 @@ describe("local issue runs", () => {
       source_task_id: task?.id,
     });
   });
+
+  it("streams tool commands and results into the run transcript", async () => {
+    const issue = createLocalIssue();
+
+    expect(startLocalIssueRun(issue.id)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    emitOutput?.(
+      "run-1",
+      `${JSON.stringify({
+        type: "tool_execution_start",
+        toolCallId: "call-1",
+        toolName: "bash",
+        args: { command: "ls -la" },
+      })}\n`,
+    );
+
+    let record = useLocalIssuesStore.getState().issues[0]!;
+    expect(record.comments[0]?.content).toContain("→ bash");
+    expect(record.comments[0]?.content).toContain("$ ls -la");
+    expect(record.messages).toHaveLength(1);
+    expect(record.messages[0]).toMatchObject({
+      type: "tool_use",
+      tool: "bash",
+      input: { command: "ls -la" },
+      call_id: "call-1",
+    });
+
+    emitOutput?.(
+      "run-1",
+      `${JSON.stringify({
+        type: "tool_execution_end",
+        toolCallId: "call-1",
+        toolName: "bash",
+        result: "file.txt",
+      })}\n`,
+    );
+    emitExit?.("run-1", { code: 0 });
+
+    record = useLocalIssuesStore.getState().issues[0]!;
+    expect(record.messages[1]).toMatchObject({
+      type: "tool_result",
+      tool: "bash",
+      output: "file.txt",
+      call_id: "call-1",
+    });
+    expect(record.tasks[0]?.status).toBe("completed");
+  });
 });

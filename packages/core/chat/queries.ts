@@ -1,7 +1,12 @@
 import { infiniteQueryOptions, queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { api } from "../api";
-import { localTaskRecord } from "../local-issues/store";
+import {
+  isLocalTaskId,
+  localTaskMessages,
+  localTaskRecord,
+  useLocalTaskMessages,
+} from "../local-issues/store";
 import type { TaskMessagePayload } from "../types/events";
 import type {
   ChatQuickActionsFailureState,
@@ -200,15 +205,17 @@ export function chatDraftRestoresOptions(sessionId: string) {
  * `task:message` events seed this cache in real time via useRealtimeSync.
  */
 export function taskMessagesOptions(taskId: string) {
+  const local = localTaskRecord(taskId) !== null;
   return queryOptions({
     queryKey: chatKeys.taskMessages(taskId),
-    // Local runs keep their output in the agent's reply comment, not in a
-    // server transcript table, so there is nothing to fetch.
+    // Local runs have no server transcript table. Their messages live in the
+    // device store, in the same shape, so the ordinary run block can render
+    // tool calls and results while the process is still alive.
     queryFn: () =>
-      localTaskRecord(taskId)
-        ? Promise.resolve([] as TaskMessagePayload[])
+      local
+        ? Promise.resolve(localTaskMessages(taskId))
         : api.listTaskMessages(taskId),
-    enabled: isTaskMessageTaskId(taskId),
+    enabled: isTaskMessageTaskId(taskId) || local,
     staleTime: Infinity,
     // Every write to this cache — this fetch, a backfill, or a realtime batch —
     // folds into what is already there instead of replacing it. Without this a
@@ -224,22 +231,27 @@ export function taskMessagesOptions(taskId: string) {
 
 /** A visible run follows WS updates and backfills on mount and completion. */
 export function useTaskMessages(taskId: string, isLive: boolean, enabled = true) {
+  const local = isLocalTaskId(taskId);
+  const localMessages = useLocalTaskMessages(local ? taskId : null);
+  const canLoad = isTaskMessageTaskId(taskId) || local;
   const query = useQuery({
     ...taskMessagesOptions(taskId),
-    enabled: enabled && isTaskMessageTaskId(taskId),
+    enabled: enabled && canLoad,
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
   });
   const previous = useRef({ isLive, enabled });
   const { refetch } = query;
   useEffect(() => {
-    if (enabled && isTaskMessageTaskId(taskId)
+    if (enabled && canLoad
       && (!previous.current.enabled || (previous.current.isLive && !isLive))) {
       void refetch({ cancelRefetch: false });
     }
     previous.current = { isLive, enabled };
-  }, [taskId, isLive, enabled, refetch]);
-  return query;
+  }, [taskId, isLive, enabled, canLoad, refetch]);
+  // The query is only the initial snapshot; a live local run writes its
+  // transcript into the store, so subscribe there for every streaming frame.
+  return local ? { ...query, data: localMessages } : query;
 }
 
 /**

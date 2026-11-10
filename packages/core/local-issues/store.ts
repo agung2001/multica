@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 import type {
   AgentTask,
   Comment,
@@ -9,6 +10,7 @@ import type {
   IssuePriority,
   IssueStatus,
   Reaction,
+  TaskMessagePayload,
   TimelineEntry,
 } from "../types";
 import { defaultStorage } from "../platform/storage";
@@ -32,6 +34,8 @@ export interface LocalIssue {
   comments: Comment[];
   /** Runs in the same shape the server task list returns. */
   tasks: AgentTask[];
+  /** Execution transcript in the shape the run block already renders. */
+  messages: TaskMessagePayload[];
 }
 
 export const LOCAL_ISSUE_OUTPUT_LIMIT = 200_000;
@@ -99,7 +103,16 @@ interface LocalIssuesState {
   createTask: (id: string, input: LocalIssueTaskInput) => AgentTask | null;
   updateTask: (id: string, taskId: string, patch: Partial<AgentTask>) => void;
   appendTaskOutput: (id: string, taskId: string, chunk: string) => void;
+  appendTaskMessage: (
+    id: string,
+    taskId: string,
+    message: Omit<LocalTaskMessage, "task_id" | "issue_id" | "seq" | "created_at"> & {
+      created_at?: string;
+    },
+  ) => void;
 }
+
+type LocalTaskMessage = TaskMessagePayload;
 
 const EMPTY_ISSUES: LocalIssue[] = [];
 
@@ -186,6 +199,7 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
           cwd: input.cwd ?? "",
           comments: [],
           tasks: [],
+          messages: [],
         };
         set((state) => ({
           issues: [record, ...state.issues].slice(0, LOCAL_ISSUE_LIMIT),
@@ -433,10 +447,57 @@ export const useLocalIssuesStore = create<LocalIssuesState>()(
           }),
         }));
       },
+      appendTaskMessage: (id, taskId, message) => {
+        set((state) => ({
+          issues: state.issues.map((entry) => {
+            if (entry.issue.id !== id) return entry;
+            const previous = entry.messages.at(-1);
+            // Text and thinking arrive token by token. Folding adjacent
+            // fragments keeps a long answer from becoming thousands of rows;
+            // tool events remain separate so the run block pairs calls and
+            // results by order.
+            if (
+              previous &&
+              previous.task_id === taskId &&
+              previous.type === message.type &&
+              (message.type === "text" || message.type === "thinking")
+            ) {
+              return {
+                ...entry,
+                messages: [
+                  ...entry.messages.slice(0, -1),
+                  {
+                    ...previous,
+                    content: capOutput(
+                      (previous.content ?? "") + (message.content ?? ""),
+                    ),
+                    created_at: message.created_at ?? nowIso(),
+                  },
+                ],
+              };
+            }
+            const seq =
+              entry.messages.reduce((max, item) => Math.max(max, item.seq), 0) + 1;
+            return {
+              ...entry,
+              messages: [
+                ...entry.messages,
+                {
+                  ...message,
+                  task_id: taskId,
+                  issue_id: id,
+                  seq,
+                  created_at: message.created_at ?? nowIso(),
+                },
+              ],
+            };
+          }),
+        }));
+      },
     }),
     {
       name: "multica_local_issues",
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => defaultStorage),
       migrate: migrateLocalIssuesState,
     },
@@ -465,6 +526,32 @@ export function localIssueRecord(idOrIdentifier: string): LocalIssue | null {
         entry.issue.id === idOrIdentifier ||
         entry.issue.identifier === idOrIdentifier,
     ) ?? null
+  );
+}
+
+/** The transcript behind a local run, in the shape the run block renders. */
+export function localTaskMessages(taskId: string): TaskMessagePayload[] {
+  for (const entry of useLocalIssuesStore.getState().issues) {
+    if (entry.tasks.some((task) => task.id === taskId)) {
+      return entry.messages.filter((message) => message.task_id === taskId);
+    }
+  }
+  return EMPTY_MESSAGES;
+}
+
+const EMPTY_MESSAGES: TaskMessagePayload[] = [];
+
+/** Subscribe a run block to a local transcript as it streams. */
+export function useLocalTaskMessages(taskId: string | null): TaskMessagePayload[] {
+  return useLocalIssuesStore(
+    useShallow((state) => {
+      if (!taskId) return EMPTY_MESSAGES;
+      for (const entry of state.issues) {
+        if (!entry.tasks.some((task) => task.id === taskId)) continue;
+        return entry.messages.filter((message) => message.task_id === taskId);
+      }
+      return EMPTY_MESSAGES;
+    }),
   );
 }
 
@@ -538,12 +625,14 @@ function migrateLocalIssue(raw: unknown, version: number): LocalIssue {
   };
   const existingComments = Array.isArray(entry.comments) ? entry.comments : [];
   const existingTasks = Array.isArray(entry.tasks) ? entry.tasks : [];
+  const existingMessages = Array.isArray(entry.messages) ? entry.messages : [];
   if (version >= 3 && existingComments.length > 0) {
     return {
       ...entry,
       runtimeId: entry.runtimeId ?? "",
       comments: existingComments,
       tasks: existingTasks,
+      messages: existingMessages,
     };
   }
 
@@ -637,6 +726,7 @@ function migrateLocalIssue(raw: unknown, version: number): LocalIssue {
     cwd: entry.cwd ?? "",
     comments: existingComments.length > 0 ? existingComments : comments,
     tasks: existingTasks.length > 0 ? existingTasks : tasks,
+    messages: existingMessages,
   };
 }
 
