@@ -27,6 +27,10 @@ vi.mock("../../common/actor-avatar", () => ({
   ActorAvatar: () => null,
 }));
 
+vi.mock("./agent-runtime-indicator", () => ({
+  AgentRuntimeIndicator: () => null,
+}));
+
 vi.mock("../../navigation", () => ({
   AppLink: ({ children, href }: { children: React.ReactNode; href: string }) => (
     <a href={href}>{children}</a>

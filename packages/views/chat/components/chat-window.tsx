@@ -70,6 +70,7 @@ import { useChatDraftRestore } from "./use-chat-draft-restore";
 import { useChatTaskActions } from "./use-chat-task-actions";
 import { useChatInputFocus } from "./use-chat-input-focus";
 import { useChatOpenReveal } from "./use-chat-open-reveal";
+import { AgentRuntimeIndicator } from "./agent-runtime-indicator";
 import { ChatWindowMessages } from "./chat-window-messages";
 import { ChatInput } from "./chat-input";
 import { ChatQueue } from "./chat-queue";
@@ -846,7 +847,8 @@ export function ChatWindow() {
             onSelectSession={handleSelectSession}
           />
         </div>
-        <div className="flex items-center gap-0.5 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <AgentRuntimeIndicator agent={activeAgent} className="max-md:hidden" />
           {!isMobile && (
             <Tooltip>
               <TooltipTrigger

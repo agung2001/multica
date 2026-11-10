@@ -34,6 +34,7 @@ import { BreadcrumbHeader } from "../../layout/breadcrumb-header";
 import { useNavigation } from "../../navigation";
 import { useT } from "../../i18n";
 import { TooltipHint } from "@multica/ui/components/common/tooltip-hint";
+import { AgentRuntimeIndicator } from "./agent-runtime-indicator";
 
 /**
  * Per-session header for the conversation pane, read as a breadcrumb: the
@@ -229,52 +230,55 @@ export function ChatSessionHeader({
         }
         leaf={leaf}
         actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <IconButton
-                  label={tCommon(($) => $.more_actions)}
-                  tooltipSide="bottom"
-                  className="text-muted-foreground"
-                />
-              }
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-auto">
-              <DropdownMenuItem onClick={startRename}>
-                <Pencil className="h-4 w-4" />
-                {t(($) => $.header.rename)}
-              </DropdownMenuItem>
-              {agent && (
-                <DropdownMenuItem
-                  onClick={() => push(`${wsPaths.agentDetail(agent.id)}?view=general`)}
-                >
-                  <Settings2 className="h-4 w-4" />
-                  {t(($) => $.header.agent_settings)}
+          <div className="flex min-w-0 items-center gap-2">
+            <AgentRuntimeIndicator agent={agent} />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <IconButton
+                    label={tCommon(($) => $.more_actions)}
+                    tooltipSide="bottom"
+                    className="text-muted-foreground"
+                  />
+                }
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-auto">
+                <DropdownMenuItem onClick={startRename}>
+                  <Pencil className="h-4 w-4" />
+                  {t(($) => $.header.rename)}
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              {isArchived ? (
-                <>
-                  <DropdownMenuItem onClick={doUnarchive}>
-                    <ArchiveRestore className="h-4 w-4" />
-                    {t(($) => $.header.unarchive)}
+                {agent && (
+                  <DropdownMenuItem
+                    onClick={() => push(`${wsPaths.agentDetail(agent.id)}?view=general`)}
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    {t(($) => $.header.agent_settings)}
                   </DropdownMenuItem>
-                  {/* Hard delete is offered only once a chat is archived. */}
-                  <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
-                    <Trash2 className="h-4 w-4" />
-                    {t(($) => $.header.delete)}
+                )}
+                <DropdownMenuSeparator />
+                {isArchived ? (
+                  <>
+                    <DropdownMenuItem onClick={doUnarchive}>
+                      <ArchiveRestore className="h-4 w-4" />
+                      {t(($) => $.header.unarchive)}
+                    </DropdownMenuItem>
+                    {/* Hard delete is offered only once a chat is archived. */}
+                    <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(true)}>
+                      <Trash2 className="h-4 w-4" />
+                      {t(($) => $.header.delete)}
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <DropdownMenuItem onClick={doArchive}>
+                    <Archive className="h-4 w-4" />
+                    {t(($) => $.header.archive)}
                   </DropdownMenuItem>
-                </>
-              ) : (
-                <DropdownMenuItem onClick={doArchive}>
-                  <Archive className="h-4 w-4" />
-                  {t(($) => $.header.archive)}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         }
       />
 
