@@ -44,6 +44,9 @@ vi.mock("./components/chat-thread-list", () => ({
 vi.mock("./components/chat-session-header", () => ({
   ChatSessionHeader: () => <div>chat-session-header</div>,
 }));
+vi.mock("./components/agent-runtime-indicator", () => ({
+  AgentRuntimeIndicator: () => <div>agent-runtime-indicator</div>,
+}));
 vi.mock("./components/chat-empty-state", () => ({
   EmptyState: () => <div>chat-empty-state</div>,
 }));

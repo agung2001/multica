@@ -86,6 +86,7 @@
     "./dashboard": "./dashboard/index.ts",
     "./dashboard/queries": "./dashboard/queries.ts",
     "./local-issues": "./local-issues/index.ts",
+    "./local-chats": "./local-chats/index.ts",
     "./local-issues/run": "./local-issues/run.ts",
     "./local-runs": "./local-runs/index.ts",
     "./agents": "./agents/index.ts",

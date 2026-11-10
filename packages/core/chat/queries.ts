@@ -8,6 +8,12 @@ import {
   useLocalTaskMessages,
   waitForLocalIssuesHydrated,
 } from "../local-issues/store";
+import {
+  isLocalChatTaskId,
+  localChatTaskMessages,
+  useLocalChatTaskMessages,
+  waitForLocalChatsHydrated,
+} from "../local-chats/store";
 import type { TaskMessagePayload } from "../types/events";
 import type {
   ChatQuickActionsFailureState,
@@ -214,12 +220,19 @@ export function taskMessagesOptions(taskId: string) {
     // store before deciding: a local task opened during rehydration must not
     // fall through to the server, where its id does not exist.
     queryFn: async () => {
+      if (isLocalChatTaskId(taskId)) {
+        await waitForLocalChatsHydrated();
+        return localChatTaskMessages(taskId);
+      }
       await waitForLocalIssuesHydrated();
       return localTaskRecord(taskId)
         ? localTaskMessages(taskId)
         : api.listTaskMessages(taskId);
     },
-    enabled: isTaskMessageTaskId(taskId) || isLocalTaskId(taskId),
+    enabled:
+      isTaskMessageTaskId(taskId) ||
+      isLocalTaskId(taskId) ||
+      isLocalChatTaskId(taskId),
     staleTime: Infinity,
     // Every write to this cache — this fetch, a backfill, or a realtime batch —
     // folds into what is already there instead of replacing it. Without this a
@@ -235,8 +248,12 @@ export function taskMessagesOptions(taskId: string) {
 
 /** A visible run follows WS updates and backfills on mount and completion. */
 export function useTaskMessages(taskId: string, isLive: boolean, enabled = true) {
-  const local = isLocalTaskId(taskId);
-  const localMessages = useLocalTaskMessages(local ? taskId : null);
+  const localIssue = isLocalTaskId(taskId);
+  const localChat = isLocalChatTaskId(taskId);
+  const local = localIssue || localChat;
+  const issueMessages = useLocalTaskMessages(localIssue ? taskId : null);
+  const chatMessages = useLocalChatTaskMessages(localChat ? taskId : null);
+  const localMessages = localChat ? chatMessages : issueMessages;
   const canLoad = isTaskMessageTaskId(taskId) || local;
   const query = useQuery({
     ...taskMessagesOptions(taskId),

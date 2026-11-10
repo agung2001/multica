@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { motion, useIsPresent } from "motion/react";
 import type { AgentAvailability } from "@multica/core/agents";
 import type { ChatPendingTask, ChatQuickAction } from "@multica/core/types";
 import { chatMessagesPageOptions } from "@multica/core/chat/queries";
+import { useLocalChatSession } from "@multica/core/local-chats";
 import { hideQueuedChatMessages } from "@multica/core/chat/pending";
 import { useRegenerateChatQuickActions } from "@multica/core/chat/mutations";
 import { ChatMessageList, ChatMessageSkeleton } from "./chat-message-list";
@@ -45,10 +46,19 @@ export function ChatWindowMessages({
     isFetchingNextPage,
   } = useInfiniteQuery(chatMessagesPageOptions(sessionId ?? ""));
   const pages = sessionId ? data?.pages ?? [] : [];
-  const messages = hideQueuedChatMessages(
+  const localChat = useLocalChatSession(sessionId);
+  const serverMessages = hideQueuedChatMessages(
     [...pages].reverse().flatMap((page) => page.messages),
     pendingTask ?? undefined,
   );
+  const messages = useMemo(() => {
+    if (!localChat?.messages.length) return serverMessages;
+    const byId = new Map(serverMessages.map((message) => [message.id, message]));
+    for (const message of localChat.messages) byId.set(message.id, message);
+    return [...byId.values()].sort((left, right) =>
+      left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
+    );
+  }, [localChat, serverMessages]);
   // Older pages prepend rows without changing the newest window's indices.
   const olderMessageCount = pages.slice(1).reduce(
     (count, page) => count + page.messages.length,

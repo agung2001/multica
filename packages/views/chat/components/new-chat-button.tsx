@@ -15,6 +15,7 @@ import {
 import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import type { Agent } from "@multica/core/types";
 import { isAgentRuntimeBound } from "@multica/core/agents";
+import { useLocalRunsStore } from "@multica/core/local-runs";
 import { toast } from "sonner";
 import { useT } from "../../i18n";
 
@@ -127,7 +128,9 @@ function AgentPickerItem({
   onSelect: (agent: Agent) => void;
 }) {
   const { t } = useT("chat");
-  const runtimeBound = isAgentRuntimeBound(agent);
+  const localBinding = useLocalRunsStore((state) => state.bindings[agent.id]);
+  const runtimeBound =
+    isAgentRuntimeBound(agent) || !!localBinding?.command.trim();
   return (
     <PickerItem
       selected={isCurrent}
@@ -174,6 +177,7 @@ export function NewChatButton({
   side?: "top" | "bottom";
 }) {
   const { t } = useT("chat");
+  const localBindings = useLocalRunsStore((state) => state.bindings);
   const label = t(($) => $.window.new_chat_tooltip);
 
   if (agents.length <= 1) {
@@ -188,7 +192,11 @@ export function NewChatButton({
               className="text-muted-foreground"
               aria-label={label}
               onClick={() => {
-                if (only && !isAgentRuntimeBound(only)) {
+                if (
+                  only &&
+                  !isAgentRuntimeBound(only) &&
+                  !localBindings[only.id]?.command.trim()
+                ) {
                   toast.error(t(($) => $.input.runtime_required_toast));
                   return;
                 }

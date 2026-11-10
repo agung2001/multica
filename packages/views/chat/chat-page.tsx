@@ -27,6 +27,7 @@ import { ChatInput } from "./components/chat-input";
 import { ChatQueue } from "./components/chat-queue";
 import { ChatThreadList } from "./components/chat-thread-list";
 import { ChatSessionHeader } from "./components/chat-session-header";
+import { AgentRuntimeIndicator } from "./components/agent-runtime-indicator";
 import { EmptyState } from "./components/chat-empty-state";
 import { NewChatButton } from "./components/new-chat-button";
 import { useChatController } from "./components/use-chat-controller";
@@ -319,6 +320,11 @@ export function ChatPage() {
           onArchive={handleArchive}
         />
       )}
+      {!c.currentSession && (
+        <div className="flex min-h-11 items-center justify-end border-b border-border/60 px-4 py-2">
+          <AgentRuntimeIndicator agent={c.activeAgent} />
+        </div>
+      )}
       {c.showSkeleton ? (
         <ChatMessageSkeleton />
       ) : c.hasMessages ? (
@@ -337,7 +343,7 @@ export function ChatPage() {
             c.isSessionArchived ||
             c.isAgentArchived ||
             c.isAgentAccessRevoked ||
-            !c.isAgentRuntimeBound ||
+            (!c.isAgentRuntimeBound && !c.canRunLocally) ||
             c.noAgent
           }
           onRegenerateQuickActions={(message) =>
@@ -365,7 +371,7 @@ export function ChatPage() {
         <NoAgentBanner />
       ) : c.isAgentArchived ? (
         <ArchivedAgentBanner agentName={c.activeAgent?.name} />
-      ) : !c.isAgentRuntimeBound && c.activeAgent ? (
+      ) : !c.isAgentRuntimeBound && !c.canRunLocally && c.activeAgent ? (
         <RuntimeRequiredBanner
           agentId={c.activeAgent.id}
           agentName={c.activeAgent.name}
@@ -398,12 +404,12 @@ export function ChatPage() {
           c.isSessionArchived ||
           c.isAgentArchived ||
           c.isAgentAccessRevoked ||
-          !c.isAgentRuntimeBound
+          (!c.isAgentRuntimeBound && !c.canRunLocally)
         }
         noAgent={c.noAgent}
         agentArchived={c.isAgentArchived}
         agentAccessRevoked={c.isAgentAccessRevoked}
-        agentRuntimeRequired={!c.isAgentRuntimeBound}
+        agentRuntimeRequired={!c.isAgentRuntimeBound && !c.canRunLocally}
         agentName={c.activeAgent?.name}
         projects={c.projects}
         projectId={c.activeProjectId}

@@ -62,6 +62,14 @@ import {
 } from "@multica/core/chat/mutations";
 import { useChatStore } from "@multica/core/chat";
 import { upsertChatMessageToCaches } from "@multica/core/chat/message-cache";
+import { useLocalRunsStore } from "@multica/core/local-runs";
+import {
+  isLocalChatTaskId,
+  startLocalChatRun,
+  stopLocalChatTask,
+  useLocalChatActiveTask,
+  useLocalChatsStore,
+} from "@multica/core/local-chats";
 import { chatQuickActionsPendingOptions } from "@multica/core/chat/queries";
 import { useQuickActionsPendingTimeout } from "@multica/core/chat/use-quick-actions-pending-timeout";
 import { useQuickActionsFailureToast } from "./use-quick-actions-failure-toast";
@@ -132,9 +140,22 @@ export function ChatWindow() {
   // (chat:message / chat:done / task:*) keep it invalidated in real time.
   //
   // This is the SOLE source for pendingTaskId — no mirror in the store.
-  const { data: pendingTask, isLoading: pendingTaskLoading } = useQuery(
+  const { data: serverPendingTask, isLoading: serverPendingTaskLoading } = useQuery(
     pendingChatTaskOptions(activeSessionId ?? ""),
   );
+  const localChatTask = useLocalChatActiveTask(activeSessionId);
+  const pendingTask = useMemo(
+    () =>
+      localChatTask
+        ? {
+            task_id: localChatTask.id,
+            status: localChatTask.status,
+            created_at: localChatTask.createdAt,
+          }
+        : serverPendingTask ?? undefined,
+    [localChatTask, serverPendingTask],
+  );
+  const pendingTaskLoading = localChatTask ? false : serverPendingTaskLoading;
   const pendingTaskId = pendingTask?.task_id ?? null;
   const stopRequestedBeforeTaskRef = useRef(false);
   // Durable deferred-cancellation draft restores (#5219). Same hook as the chat
@@ -235,6 +256,11 @@ export function ChatWindow() {
     null;
   const activeAgentRuntimeBound =
     !!activeAgent && isAgentRuntimeBound(activeAgent);
+  const localBindings = useLocalRunsStore((state) => state.bindings);
+  const activeLocalBinding = activeAgent
+    ? localBindings[activeAgent.id] ?? null
+    : null;
+  const canRunLocally = !!activeLocalBinding?.command.trim();
 
   // A session outlives the permission that created it: the agent can be flipped
   // to personal, change owner, or drop this member from its allow-list, and the
@@ -439,7 +465,9 @@ export function ChatWindow() {
         });
         return false;
       }
-      if (!activeAgentRuntimeBound) {
+      const localSend =
+        canRunLocally && (!attachmentIds || attachmentIds.length === 0);
+      if (!activeAgentRuntimeBound && !localSend) {
         toast.error(t(($) => $.input.runtime_required_toast));
         return false;
       }
@@ -476,6 +504,38 @@ export function ChatWindow() {
       if (!sessionId) {
         apiLogger.warn("sendChatMessage aborted: ensureSession returned null");
         return false;
+      }
+
+      if (localSend && activeLocalBinding) {
+        const taskId = startLocalChatRun({
+          sessionId,
+          agentId: activeAgent.id,
+          binding: activeLocalBinding,
+          prompt: finalContent,
+        });
+        if (!taskId) {
+          apiLogger.warn("local send aborted: no runnable command", {
+            sessionId,
+            agentId: activeAgent.id,
+          });
+          toast.error(t(($) => $.input.send_failed_toast));
+          return false;
+        }
+        const sent: ChatMessage = {
+          id: `local-chat-message-${crypto.randomUUID()}`,
+          chat_session_id: sessionId,
+          role: "user",
+          content: finalContent,
+          task_id: taskId,
+          created_at: new Date().toISOString(),
+        };
+        useLocalChatsStore.getState().appendMessage(sessionId, activeAgent.id, sent);
+        const live = useChatStore.getState();
+        const stillOnSourceSession = isStillOnComposeTarget(live.activeSessionId, activeSessionId);
+        if (stillOnSourceSession) setActiveSession(sessionId);
+        commitInput?.({ extraDraftKeys: [sessionId], clearEditor: stillOnSourceSession });
+        apiLogger.info("local send started", { sessionId, taskId });
+        return true;
       }
 
       // Await-then-render: the composer keeps the user's text and attachments
@@ -588,6 +648,8 @@ export function ChatWindow() {
       isAgentAccessRevoked,
       pendingTask,
       pendingTaskId,
+      canRunLocally,
+      activeLocalBinding,
       ensureSession,
       cancelChatTask,
       qc,
@@ -599,6 +661,10 @@ export function ChatWindow() {
   const handleStop = useCallback(() => {
     if (!pendingTaskId || !activeSessionId) {
       apiLogger.debug("cancelTask skipped: no pending task");
+      return;
+    }
+    if (isLocalChatTaskId(pendingTaskId)) {
+      stopLocalChatTask(pendingTaskId);
       return;
     }
     if (!isTaskMessageTaskId(pendingTaskId)) {
@@ -903,7 +969,7 @@ export function ChatWindow() {
               isSessionArchived ||
               isAgentArchived ||
               isAgentAccessRevoked ||
-              !activeAgentRuntimeBound ||
+              (!activeAgentRuntimeBound && !canRunLocally) ||
               noAgent
             }
             quickActionsPendingMessageId={quickActionsPending?.message_id ?? null}
@@ -934,7 +1000,7 @@ export function ChatWindow() {
         <AgentAccessRevokedBanner agentName={activeAgent?.name} />
       ) : isAgentArchived ? (
         <ArchivedAgentBanner agentName={activeAgent?.name} />
-      ) : !activeAgentRuntimeBound && activeAgent ? (
+      ) : !activeAgentRuntimeBound && !canRunLocally && activeAgent ? (
         <RuntimeRequiredBanner
           agentId={activeAgent.id}
           agentName={activeAgent.name}
@@ -970,12 +1036,12 @@ export function ChatWindow() {
           isSessionArchived ||
           isAgentArchived ||
           isAgentAccessRevoked ||
-          !activeAgentRuntimeBound
+          (!activeAgentRuntimeBound && !canRunLocally)
         }
         noAgent={noAgent}
         agentArchived={isAgentArchived}
         agentAccessRevoked={isAgentAccessRevoked}
-        agentRuntimeRequired={!activeAgentRuntimeBound}
+        agentRuntimeRequired={!activeAgentRuntimeBound && !canRunLocally}
         agentName={activeAgent?.name}
         projects={projects}
         projectId={activeProjectId}
@@ -1119,7 +1185,9 @@ function AgentPickerItem({
   onSelect: (agent: Agent) => void;
 }) {
   const { t } = useT("chat");
-  const runtimeBound = isAgentRuntimeBound(agent);
+  const localBinding = useLocalRunsStore((state) => state.bindings[agent.id]);
+  const runtimeBound =
+    isAgentRuntimeBound(agent) || !!localBinding?.command.trim();
   return (
     <PickerItem
       selected={isCurrent}

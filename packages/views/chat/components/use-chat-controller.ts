@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useQuery,
@@ -36,6 +36,16 @@ import {
 } from "@multica/core/chat/mutations";
 import { useChatStore } from "@multica/core/chat";
 import { upsertChatMessageToCaches } from "@multica/core/chat/message-cache";
+import { useLocalRunsStore } from "@multica/core/local-runs";
+import {
+  isLocalChatTaskId,
+  localChatPendingTask,
+  startLocalChatRun,
+  stopLocalChatTask,
+  useLocalChatActiveTask,
+  useLocalChatSession,
+  useLocalChatsStore,
+} from "@multica/core/local-chats";
 import {
   enqueuePendingChatTask,
   hideQueuedChatMessages,
@@ -153,7 +163,7 @@ export function hasInFlightPendingTask(
   sessionId: string,
 ): boolean {
   const pending = qc.getQueryData<ChatPendingTask>(chatKeys.pendingTask(sessionId));
-  return Boolean(pending?.task_id);
+  return Boolean(pending?.task_id || localChatPendingTask(sessionId));
 }
 
 export function seedAcceptedPendingTask(
@@ -208,6 +218,8 @@ export function useChatController(opts?: { isActive?: boolean }) {
   const { t } = useT("chat");
   const wsId = useWorkspaceId();
   const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const localChat = useLocalChatSession(activeSessionId);
+  const localChatTask = useLocalChatActiveTask(activeSessionId);
   const selectedAgentId = useChatStore((s) => s.selectedAgentId);
   const selectedProjectId = useChatStore((s) => s.selectedProjectId);
   const setActiveSession = useChatStore((s) => s.setActiveSession);
@@ -237,12 +249,32 @@ export function useChatController(opts?: { isActive?: boolean }) {
   const messagePages = activeSessionId ? rawMessagePages?.pages ?? [] : [];
   const allMessages = [...messagePages].reverse().flatMap((page) => page.messages);
 
-  const { data: pendingTask, isLoading: pendingTaskLoading } = useQuery(
+  const { data: serverPendingTask, isLoading: serverPendingTaskLoading } = useQuery(
     pendingChatTaskOptions(activeSessionId ?? ""),
   );
+  const pendingTask = useMemo<ChatPendingTask | undefined>(
+    () =>
+      localChatTask
+        ? {
+            task_id: localChatTask.id,
+            status: localChatTask.status,
+            created_at: localChatTask.createdAt,
+          }
+        : serverPendingTask ?? undefined,
+    [localChatTask, serverPendingTask],
+  );
+  const pendingTaskLoading = localChatTask ? false : serverPendingTaskLoading;
   const showSkeleton =
     !!activeSessionId && (messagesLoading || pendingTaskLoading);
-  const messages = hideQueuedChatMessages(allMessages, pendingTask);
+  const serverMessages = hideQueuedChatMessages(allMessages, pendingTask);
+  const messages = useMemo(() => {
+    if (!localChat?.messages.length) return serverMessages;
+    const byId = new Map(serverMessages.map((message) => [message.id, message]));
+    for (const message of localChat.messages) byId.set(message.id, message);
+    return [...byId.values()].sort((left, right) =>
+      left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id),
+    );
+  }, [localChat, serverMessages]);
   const olderMessageCount = messagePages
     .slice(1)
     .reduce((sum, page) => sum + page.messages.length, 0);
@@ -363,6 +395,11 @@ export function useChatController(opts?: { isActive?: boolean }) {
     availableAgents[0] ??
     null;
   const isAgentRuntimeBound = !!activeAgent && hasAgentRuntime(activeAgent);
+  const localBindings = useLocalRunsStore((state) => state.bindings);
+  const activeLocalBinding = activeAgent
+    ? localBindings[activeAgent.id] ?? null
+    : null;
+  const canRunLocally = !!activeLocalBinding?.command.trim();
 
   // A session outlives the permission that created it. The agent can be flipped
   // to personal, change owner, or drop this member from its allow-list, and the
@@ -528,7 +565,9 @@ export function useChatController(opts?: { isActive?: boolean }) {
         });
         return false;
       }
-      if (!isAgentRuntimeBound) {
+      const localSend =
+        canRunLocally && (!attachmentIds || attachmentIds.length === 0);
+      if (!isAgentRuntimeBound && !localSend) {
         toast.error(t(($) => $.input.runtime_required_toast));
         return false;
       }
@@ -566,6 +605,38 @@ export function useChatController(opts?: { isActive?: boolean }) {
       if (!sessionId) {
         apiLogger.warn("sendChatMessage aborted: ensureSession returned null");
         return false;
+      }
+
+      if (localSend && activeLocalBinding) {
+        const taskId = startLocalChatRun({
+          sessionId,
+          agentId: activeAgent.id,
+          binding: activeLocalBinding,
+          prompt: finalContent,
+        });
+        if (!taskId) {
+          apiLogger.warn("local send aborted: no runnable command", {
+            sessionId,
+            agentId: activeAgent.id,
+          });
+          toast.error(t(($) => $.input.send_failed_toast));
+          return false;
+        }
+        const sent: ChatMessage = {
+          id: `local-chat-message-${crypto.randomUUID()}`,
+          chat_session_id: sessionId,
+          role: "user",
+          content: finalContent,
+          task_id: taskId,
+          created_at: new Date().toISOString(),
+        };
+        useLocalChatsStore.getState().appendMessage(sessionId, activeAgent.id, sent);
+        const live = useChatStore.getState();
+        const stillOnSourceSession = isStillOnComposeTarget(live.activeSessionId, activeSessionId);
+        if (stillOnSourceSession) setActiveSession(sessionId);
+        commitInput?.({ extraDraftKeys: [sessionId], clearEditor: stillOnSourceSession });
+        apiLogger.info("local send started", { sessionId, taskId });
+        return true;
       }
 
       // Await-then-render: the composer keeps the user's text and attachments
@@ -673,6 +744,8 @@ export function useChatController(opts?: { isActive?: boolean }) {
       pendingTask,
       pendingTaskId,
       isAgentRuntimeBound,
+      canRunLocally,
+      activeLocalBinding,
       ensureSession,
       cancelChatTask,
       qc,
@@ -684,6 +757,10 @@ export function useChatController(opts?: { isActive?: boolean }) {
   const handleStop = useCallback(() => {
     if (!pendingTaskId || !activeSessionId) {
       apiLogger.debug("cancelTask skipped: no pending task");
+      return;
+    }
+    if (isLocalChatTaskId(pendingTaskId)) {
+      stopLocalChatTask(pendingTaskId);
       return;
     }
     if (!isTaskMessageTaskId(pendingTaskId)) {
@@ -850,6 +927,7 @@ export function useChatController(opts?: { isActive?: boolean }) {
     isAgentArchived,
     isAgentAccessRevoked,
     isAgentRuntimeBound,
+    canRunLocally,
     activeAgent,
     customizeConversationStartersHref,
     noAgent,
