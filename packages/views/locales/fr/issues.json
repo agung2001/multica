@@ -1867,21 +1867,5 @@
       "empty_title": "Aucune vue enregistrée pour l'instant",
       "empty_description": "Réglez les filtres et l'affichage d'une liste de tâches, puis enregistrez-les comme vue."
     }
-  },
-  "local_run": {
-    "you": "Vous",
-    "agent_fallback": "Agent",
-    "draft": "Pas encore exécuté",
-    "running": "En cours",
-    "done": "Terminé",
-    "failed": "Échec",
-    "stopped": "Arrêté",
-    "reply_placeholder": "Répondre pour continuer…",
-    "send": "Envoyer",
-    "hint": "Entrée pour envoyer",
-    "run": "Exécuter",
-    "stop": "Arrêter",
-    "title": "Exécuté sur cette machine",
-    "idle": "Aucune exécution."
   }
 }

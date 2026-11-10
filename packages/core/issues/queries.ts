@@ -22,12 +22,17 @@ import type {
 import type { SidebarIssuesRequest } from "./sidebar-list";
 import { ALL_STATUSES } from "./config";
 import { issueColumnCategory } from "./status-category";
-import { localIssueRecord } from "../local-issues/store";
+import { localIssueRecord, localIssueTasks, localIssueTimeline } from "../local-issues/store";
 
 export function issueTasksOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.tasks(issueId),
-    queryFn: () => api.listTasksByIssue(issueId),
+    // A local issue's runs live beside it on this device; there is no server
+    // task row to list.
+    queryFn: () => {
+      const local = localIssueRecord(issueId);
+      return local ? Promise.resolve(localIssueTasks(local)) : api.listTasksByIssue(issueId);
+    },
     enabled: !!issueId,
     staleTime: 30_000,
     refetchOnWindowFocus: true,
@@ -596,7 +601,10 @@ export function issueDuplicatesOptions(wsId: string, id: string) {
 export function childIssuesOptions(wsId: string, id: string) {
   return queryOptions({
     queryKey: issueKeys.children(wsId, id),
-    queryFn: () => api.listChildIssues(id).then((r) => r.issues),
+    queryFn: () => {
+      const local = localIssueRecord(id);
+      return local ? Promise.resolve([]) : api.listChildIssues(id).then((r) => r.issues);
+    },
     // Child creation can happen while this workspace is not the active
     // realtime subscription (for example, an agent creates it while a
     // desktop tab is showing another workspace). The global Infinity
@@ -684,7 +692,12 @@ export function childrenByParentsOptions(
 export function issueTimelineOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.timeline(issueId),
-    queryFn: () => api.listTimeline(issueId),
+    // A local issue's comments are its timeline; no server request exists for
+    // a row that was never posted.
+    queryFn: () => {
+      const local = localIssueRecord(issueId);
+      return local ? Promise.resolve(localIssueTimeline(local)) : api.listTimeline(issueId);
+    },
   });
 }
 
@@ -692,6 +705,8 @@ export function issueReactionsOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.reactions(issueId),
     queryFn: async () => {
+      const local = localIssueRecord(issueId);
+      if (local) return local.issue.reactions ?? [];
       const issue = await api.getIssue(issueId);
       return issue.reactions ?? [];
     },
@@ -701,7 +716,10 @@ export function issueReactionsOptions(issueId: string) {
 export function issueSubscribersOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.subscribers(issueId),
-    queryFn: () => api.listIssueSubscribers(issueId),
+    queryFn: () => {
+      const local = localIssueRecord(issueId);
+      return local ? Promise.resolve([]) : api.listIssueSubscribers(issueId);
+    },
   });
 }
 
@@ -719,6 +737,9 @@ export function issueUsageOptions(issueId: string) {
 export function issueAttachmentsOptions(issueId: string) {
   return queryOptions({
     queryKey: issueKeys.attachments(issueId),
-    queryFn: () => api.listAttachments(issueId),
+    queryFn: () => {
+      const local = localIssueRecord(issueId);
+      return local ? Promise.resolve([]) : api.listAttachments(issueId);
+    },
   });
 }

@@ -28,7 +28,13 @@ import { issueChangedDims } from "./surface/membership";
 import { addIssueToBuckets } from "./cache-helpers";
 import { createLocalIssueIfBound } from "../local-issues/intercept";
 import { isLocalIssueId, localIssueRecord, useLocalIssuesStore } from "../local-issues/store";
-import { autoRunLocalIssue } from "../local-issues/run";
+import {
+  autoRunLocalIssue,
+  retryLocalIssueRun,
+  startLocalIssueRun,
+  stopLocalIssueRun,
+} from "../local-issues/run";
+import { useAuthStore } from "../auth";
 import {
   cleanupDeletedIssueCaches,
   collectDeletedIssueCacheMetadata,
@@ -149,19 +155,22 @@ function useIssueCreateMutation<TVariables>(
   return useMutation({
     mutationFn,
     onSuccess: (newIssue) => {
-      for (const [key, data] of qc.getQueriesData<ListIssuesCache>({ queryKey: issueKeys.list(wsId) })) {
-        if (data) qc.setQueryData<ListIssuesCache>(key, addIssueToBuckets(data, newIssue));
-      }
       // Surface the just-created issue in cmd+k's Recent list without
       // requiring the user to open it first.
       useRecentIssuesStore.getState().recordVisit(wsId, newIssue.id);
+      // A local issue is not a server row; keep it out of server list caches.
+      if (isLocalIssueId(newIssue.id)) return;
+      for (const [key, data] of qc.getQueriesData<ListIssuesCache>({ queryKey: issueKeys.list(wsId) })) {
+        if (data) qc.setQueryData<ListIssuesCache>(key, addIssueToBuckets(data, newIssue));
+      }
       // Invalidate parent's children query so sub-issues list updates immediately
       if (newIssue.parent_issue_id) {
         qc.invalidateQueries({ queryKey: issueKeys.children(wsId, newIssue.parent_issue_id) });
         qc.invalidateQueries({ queryKey: issueKeys.childProgress(wsId) });
       }
     },
-    onSettled: () => {
+    onSettled: (newIssue) => {
+      if (newIssue && isLocalIssueId(newIssue.id)) return;
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.flatAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
@@ -216,7 +225,7 @@ export function useUpdateIssue() {
             ...(data.priority ? { priority: data.priority } : {}),
           });
         }
-        if (local) return Promise.resolve(local.issue);
+        if (local) return Promise.resolve(localIssueRecord(id)?.issue ?? local.issue);
         return api.updateIssue(id, data);
       }
       if (!moveIntent) return api.updateIssue(id, data);
@@ -224,6 +233,7 @@ export function useUpdateIssue() {
       return api.moveIssue(id, { ...target, ...moveIntent });
     },
     onMutate: ({ id, move_intent: _moveIntent, ...data }) => {
+      if (isLocalIssueId(id)) return undefined;
       // suppress_run is a write-time control field, not an Issue column.
       // description_base is merge metadata, while description itself
       // is resolved against that base on the server and therefore is not safe
@@ -311,6 +321,7 @@ export function useUpdateIssue() {
       return { change, prevChildren, parentId, id, inboxWrite };
     },
     onError: (_err, vars, ctx) => {
+      if (isLocalIssueId(vars.id)) return;
       if (ctx) {
         rollbackIssueChange(qc, wsId, ctx.id, ctx.change);
       }
@@ -332,6 +343,7 @@ export function useUpdateIssue() {
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
     },
     onSuccess: (serverIssue, vars) => {
+      if (isLocalIssueId(vars.id)) return;
       // Reconcile with the authoritative server entity by patching the one card
       // in place — NOT by invalidating + refetching the list. The list refetch
       // is what made a successful move flicker: the optimistic card was already
@@ -382,6 +394,7 @@ export function useUpdateIssue() {
       invalidateStaleListKeys(qc, reconcile.staleKeys);
     },
     onSettled: (_data, err, vars, ctx) => {
+      if (isLocalIssueId(vars.id)) return;
       settleInboxAfterIssueWrite(qc, wsId, ctx?.inboxWrite, err !== null);
       // The issue's own list + detail caches are reconciled surgically in
       // onSuccess / onError, so they are deliberately NOT invalidated here — a
@@ -453,12 +466,19 @@ export function useDeleteIssue() {
       // A local issue is not on the server, so deleting it is a local removal;
       // asking the API would answer "issue not found".
       if (isLocalIssueId(id)) {
+        const local = localIssueRecord(id);
+        for (const task of local?.tasks ?? []) {
+          if (["queued", "dispatched", "running", "waiting_local_directory"].includes(task.status)) {
+            stopLocalIssueRun(task.id);
+          }
+        }
         useLocalIssuesStore.getState().remove(id);
         return Promise.resolve();
       }
       return api.deleteIssue(id);
     },
     onMutate: async (id) => {
+      if (isLocalIssueId(id)) return undefined;
       await Promise.all([
         qc.cancelQueries({ queryKey: issueKeys.list(wsId) }),
         qc.cancelQueries({ queryKey: issueKeys.myAll(wsId) }),
@@ -499,7 +519,8 @@ export function useDeleteIssue() {
         prevChildren,
       };
     },
-    onError: (_err, _id, ctx) => {
+    onError: (_err, id, ctx) => {
+      if (isLocalIssueId(id)) return;
       if (ctx?.prevLists) {
         for (const [key, snapshot] of ctx.prevLists) {
           qc.setQueryData(key, snapshot);
@@ -526,9 +547,11 @@ export function useDeleteIssue() {
     },
     onSuccess: (_data, id, ctx) => {
       useRecentContextStore.getState().forgetContext(wsId, { type: "issue", id });
+      if (isLocalIssueId(id)) return;
       cleanupDeletedIssueCaches(qc, wsId, id, ctx?.metadata);
     },
-    onSettled: (_data, _err, _id, ctx) => {
+    onSettled: (_data, _err, id, ctx) => {
+      if (isLocalIssueId(id)) return;
       qc.invalidateQueries({ queryKey: issueKeys.list(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.flatAll(wsId) });
       qc.invalidateQueries({ queryKey: issueKeys.tableAll(wsId) });
@@ -876,6 +899,7 @@ type TimelineCache = TimelineEntry[];
 export function useCreateComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
     mutationFn: ({
       content,
@@ -892,8 +916,27 @@ export function useCreateComment(issueId: string) {
       suppressAgentIds?: string[];
       /** Running turns this comment goes into instead of a follow-up run. */
       steerTaskIds?: string[];
-    }) => api.createComment(issueId, content, type, parentId, attachmentIds, suppressAgentIds, steerTaskIds),
+    }) => {
+      if (isLocal) {
+        const comment = useLocalIssuesStore.getState().addComment(issueId, {
+          authorType: "member",
+          authorId: useAuthStore.getState().user?.id ?? "",
+          content,
+          parentId,
+          type: (type as "comment" | "status_change" | "progress_update" | "system" | undefined) ?? "comment",
+        });
+        if (!comment) return Promise.reject(new Error("local issue not found"));
+        // A comment on a local issue is the same trigger a comment on a server
+        // issue is: it answers in the agent's own timeline.
+        if ((type ?? "comment") === "comment") {
+          startLocalIssueRun(issueId, content, comment.id);
+        }
+        return Promise.resolve(comment);
+      }
+      return api.createComment(issueId, content, type, parentId, attachmentIds, suppressAgentIds, steerTaskIds);
+    },
     onSuccess: (comment) => {
+      if (isLocal) return;
       if (comment.issue_revision) {
         onIssueAuxiliaryRevision(qc, wsId, issueId, comment.issue_revision);
       } else {
@@ -948,6 +991,7 @@ export function useCreateComment(issueId: string) {
 export function useUpdateComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
     mutationFn: ({
       commentId,
@@ -963,7 +1007,16 @@ export function useUpdateComment(issueId: string) {
       suppressAgentIds?: string[];
       contentBase?: string;
       expectedRevision?: number;
-    }) => api.updateComment(commentId, content, attachmentIds, suppressAgentIds, contentBase, expectedRevision),
+    }) => {
+      if (isLocal) {
+        const comment = useLocalIssuesStore.getState().updateComment(issueId, commentId, {
+          content,
+        });
+        if (!comment) return Promise.reject(new Error("local comment not found"));
+        return Promise.resolve(comment);
+      }
+      return api.updateComment(commentId, content, attachmentIds, suppressAgentIds, contentBase, expectedRevision);
+    },
     onMutate: async ({ commentId, content, attachmentIds }) => {
       await qc.cancelQueries({ queryKey: issueKeys.timeline(issueId) });
       const prev = qc.getQueryData<TimelineCache>(issueKeys.timeline(issueId));
@@ -983,6 +1036,7 @@ export function useUpdateComment(issueId: string) {
       }
     },
     onSuccess: (comment) => {
+      if (isLocal) return;
       if (comment.issue_revision) {
         onIssueAuxiliaryRevision(qc, wsId, issueId, comment.issue_revision);
       } else {
@@ -993,6 +1047,7 @@ export function useUpdateComment(issueId: string) {
       invalidateLastActivitySortedIssueLists(qc, wsId);
     },
     onSettled: () => {
+      if (isLocal) return;
       qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
     },
   });
@@ -1001,10 +1056,15 @@ export function useUpdateComment(issueId: string) {
 export function useDeleteComment(issueId: string) {
   const qc = useQueryClient();
   const wsId = useWorkspaceId();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
     // The capability is read when the delete runs, so the route matches the
     // copy the confirmation showed. Older servers delete the replies too.
     mutationFn: async (commentId: string) => {
+      if (isLocal) {
+        useLocalIssuesStore.getState().deleteComment(issueId, commentId);
+        return false;
+      }
       const keepReplies = configStore.getState().commentDeleteKeepRepliesSupported;
       await api.deleteComment(commentId, { keepReplies });
       return keepReplies;
@@ -1014,6 +1074,7 @@ export function useDeleteComment(issueId: string) {
     // confirms, mirror its outcome; realtime events and the settle refetch
     // reconcile the rest.
     onSuccess: (keptReplies, commentId) => {
+      if (isLocal) return;
       qc.setQueryData<TimelineCache>(issueKeys.timeline(issueId), (old) => {
         if (!old) return old;
         return keptReplies
@@ -1027,6 +1088,7 @@ export function useDeleteComment(issueId: string) {
       invalidateLastActivitySortedIssueLists(qc, wsId);
     },
     onSettled: () => {
+      if (isLocal) return;
       qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
     },
   });
@@ -1079,9 +1141,17 @@ function collectThreadCommentIds(
 
 export function useResolveComment(issueId: string) {
   const qc = useQueryClient();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
-    mutationFn: ({ commentId, resolved }: { commentId: string; resolved: boolean }) =>
-      resolved ? api.resolveComment(commentId) : api.unresolveComment(commentId),
+    mutationFn: ({ commentId, resolved }: { commentId: string; resolved: boolean }) => {
+      if (isLocal) {
+        useLocalIssuesStore
+          .getState()
+          .setCommentResolved(issueId, commentId, resolved, useAuthStore.getState().user?.id ?? "");
+        return Promise.resolve(null);
+      }
+      return resolved ? api.resolveComment(commentId) : api.unresolveComment(commentId);
+    },
     onMutate: async ({ commentId, resolved }) => {
       await qc.cancelQueries({ queryKey: issueKeys.timeline(issueId) });
       const prev = qc.getQueryData<TimelineCache>(issueKeys.timeline(issueId));
@@ -1116,6 +1186,7 @@ export function useResolveComment(issueId: string) {
       }
     },
     onSettled: () => {
+      if (isLocal) return;
       qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
     },
   });
@@ -1123,6 +1194,7 @@ export function useResolveComment(issueId: string) {
 
 export function useToggleCommentReaction(issueId: string) {
   const qc = useQueryClient();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
     mutationKey: ["toggleCommentReaction", issueId] as const,
     mutationFn: async ({
@@ -1130,6 +1202,15 @@ export function useToggleCommentReaction(issueId: string) {
       emoji,
       existing,
     }: ToggleCommentReactionVars) => {
+      if (isLocal) {
+        return useLocalIssuesStore.getState().toggleCommentReaction(
+          issueId,
+          commentId,
+          emoji,
+          useAuthStore.getState().user?.id ?? "",
+          existing?.id,
+        );
+      }
       if (existing) {
         await api.removeReaction(commentId, emoji);
         return null;
@@ -1137,6 +1218,7 @@ export function useToggleCommentReaction(issueId: string) {
       return api.addReaction(commentId, emoji);
     },
     onSettled: () => {
+      if (isLocal) return;
       qc.invalidateQueries({ queryKey: issueKeys.timeline(issueId) });
     },
   });
@@ -1265,9 +1347,19 @@ export function useUnsubscribeFromIssueSubtree(issueId: string) {
 
 export function useCancelIssueRun(issueId: string) {
   const client = useQueryClient();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
-    mutationFn: (taskId: string) => api.cancelTask(issueId, taskId),
-    onSuccess: () => client.invalidateQueries({ queryKey: issueKeys.tasks(issueId) }),
+    mutationFn: async (taskId: string) => {
+      if (isLocal) {
+        stopLocalIssueRun(taskId);
+        return;
+      }
+      await api.cancelTask(issueId, taskId);
+    },
+    onSuccess: () => {
+      if (isLocal) return;
+      client.invalidateQueries({ queryKey: issueKeys.tasks(issueId) });
+    },
   });
 }
 
@@ -1285,8 +1377,18 @@ export function useRetryTaskSupplement(issueId: string) {
 
 export function useRetryIssueRun(issueId: string) {
   const client = useQueryClient();
+  const isLocal = isLocalIssueId(issueId);
   return useMutation({
-    mutationFn: (taskId: string) => api.rerunIssue(issueId, taskId),
-    onSuccess: () => client.invalidateQueries({ queryKey: issueKeys.tasks(issueId) }),
+    mutationFn: async (taskId: string) => {
+      if (isLocal) {
+        retryLocalIssueRun(taskId);
+        return;
+      }
+      await api.rerunIssue(issueId, taskId);
+    },
+    onSuccess: () => {
+      if (isLocal) return;
+      client.invalidateQueries({ queryKey: issueKeys.tasks(issueId) });
+    },
   });
 }

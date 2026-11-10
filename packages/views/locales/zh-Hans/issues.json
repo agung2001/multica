@@ -1798,21 +1798,5 @@
       "empty_title": "还没有保存的视图",
       "empty_description": "在任务列表里调好筛选和显示方式，然后另存为视图。"
     }
-  },
-  "local_run": {
-    "you": "你",
-    "agent_fallback": "智能体",
-    "draft": "尚未运行",
-    "running": "运行中",
-    "done": "已完成",
-    "failed": "失败",
-    "stopped": "已停止",
-    "reply_placeholder": "回复以继续…",
-    "send": "发送",
-    "hint": "按 Enter 发送",
-    "run": "运行",
-    "stop": "停止",
-    "title": "在这台电脑上运行",
-    "idle": "还没有运行记录。"
   }
 }

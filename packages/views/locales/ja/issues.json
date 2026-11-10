@@ -1798,21 +1798,5 @@
       "empty_title": "保存したビューはまだありません",
       "empty_description": "タスク一覧でフィルターと表示方法を調整し、ビューとして保存します。"
     }
-  },
-  "local_run": {
-    "you": "あなた",
-    "agent_fallback": "エージェント",
-    "draft": "未実行",
-    "running": "実行中",
-    "done": "完了",
-    "failed": "失敗",
-    "stopped": "停止",
-    "reply_placeholder": "返信して続ける…",
-    "send": "送信",
-    "hint": "Enter で送信",
-    "run": "実行",
-    "stop": "停止",
-    "title": "このマシンで実行",
-    "idle": "まだ実行がありません。"
   }
 }

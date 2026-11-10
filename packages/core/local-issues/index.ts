@@ -1,13 +1,21 @@
 export {
   LOCAL_ISSUE_OUTPUT_LIMIT,
-  activeLocalTurn,
   isLocalIssueId,
+  isLocalTaskId,
+  localIssueComments,
   localIssueId,
   localIssueRecord,
+  localIssueTasks,
+  localIssueTimeline,
+  localTaskRecord,
   selectLocalIssues,
   useLocalIssuesStore,
   type LocalIssue,
-  type LocalIssueTurn,
-  type LocalRunStatus,
 } from "./store";
-export { autoRunLocalIssue, startLocalIssueRun, stopLocalIssueRun } from "./run";
+export {
+  autoRunLocalIssue,
+  hasActiveLocalTask,
+  retryLocalIssueRun,
+  startLocalIssueRun,
+  stopLocalIssueRun,
+} from "./run";

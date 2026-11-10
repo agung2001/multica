@@ -76,7 +76,7 @@ import { ActionShortcutKeycaps } from "../../common/shortcut-keycaps";
 import { PropRow } from "../../common/prop-row";
 import { TimelineHandoff } from "../../workflows/timeline-handoff";
 import { PropertyIcon } from "../../common/property-icon";
-import type { Attachment, Issue, IssueProperty, IssueStatus, IssueStatusCategory, IssuePriority, TimelineEntry, UpdateIssueRequest } from "@multica/core/types";
+import type { AgentTask, Attachment, Issue, IssueProperty, IssueStatus, IssueStatusCategory, IssuePriority, TimelineEntry, UpdateIssueRequest } from "@multica/core/types";
 import { contentReferencesAttachment } from "@multica/core/types";
 import { isBuiltInIssueStatus } from "@multica/core/issue-statuses";
 import { commentLandingTarget, isDeletedComment } from "@multica/core/issues/comment-deletion";
@@ -190,8 +190,7 @@ import { matchesPinyin } from "../../editor/extensions/pinyin-match";
 import { MetadataSection } from "./metadata-section";
 import { IssueSidebarSectionHeader, IssueSidebarStack, IssueSidebarPropertyGrid } from "./issue-sidebar-section";
 import { useT } from "../../i18n";
-import { LocalIssueComposer, LocalIssueFeed } from "./local-issue-feed";
-import { isLocalIssueId } from "@multica/core/local-issues";
+import { isLocalIssueId, useLocalIssuesStore } from "@multica/core/local-issues";
 import { useIssueDetailScrollRestore } from "../hooks/use-issue-detail-scroll-restore";
 import { useJumpToLatest } from "../hooks/use-jump-to-latest";
 import { useInPageFind } from "../hooks/use-in-page-find";
@@ -507,6 +506,7 @@ function ActivityText({ entry, text }: { entry: TimelineEntry; text: string }) {
 // Stable reference for threads with no replies. Inline `[]` would create a
 // new array on every render and bust React.memo on CommentCard / ResolvedThreadBar.
 const EMPTY_REPLIES: TimelineEntry[] = [];
+const EMPTY_LOCAL_TASKS: AgentTask[] = [];
 
 // Sidebar progressive disclosure
 //
@@ -1399,6 +1399,11 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
   // A local issue lives in this device's storage: anything the sidebar loads
   // from the server for it will only fail.
   const isLocal = isLocalIssueId(issueId);
+  const localTasks = useLocalIssuesStore((state) =>
+    isLocal
+      ? state.issues.find((entry) => entry.issue.id === issueId)?.tasks ?? EMPTY_LOCAL_TASKS
+      : EMPTY_LOCAL_TASKS,
+  );
   const { data: members = [] } = useQuery(memberListOptions(wsId));
   const { data: agents = [] } = useQuery(agentListOptions(wsId));
   // Workspace owners and admins moderate any comment authored by anyone
@@ -1706,7 +1711,11 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
     editComment, deleteComment, toggleResolveComment, toggleReaction: handleToggleReaction,
   } = useIssueTimeline(id, user?.id);
 
-  const { data: commentTasks } = useQuery(issueTasksOptions(id));
+  const { data: serverCommentTasks } = useQuery({
+    ...issueTasksOptions(id),
+    enabled: !isLocal,
+  });
+  const commentTasks = isLocal ? localTasks : serverCommentTasks;
   const enteringRunIds = useNewRunIds(id, commentTasks);
   const previousCommentRuns = useRef(new Map<string, CommentRun[]>());
   const { runs: commentRuns, timeline: displayTimeline, standaloneRuns } = useMemo(() => {
@@ -3972,9 +3981,7 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
                 first commit. Without this null guard Virtuoso falls back to
                 its own scroller, grabs 0 height inside overflow-y-auto, and
                 miscomputes total-height on first paint. */}
-            {isLocalIssueId(id) ? (
-              <LocalIssueFeed issueId={id} />
-            ) : timelineLoading && timelineView.groups.length === 0 ? (
+            {timelineLoading && timelineView.groups.length === 0 ? (
               <TimelineSkeleton />
             ) : (
               // Two render modes:
@@ -4072,17 +4079,13 @@ export function IssueDetail({ issueId, onDelete, onDone, defaultSidebarOpen = tr
             {stickyComposer && jumpToLatest.visible && (
               <JumpToLatestButton onClick={jumpToLatest.jump} label={t(($) => $.timeline.jump_to_latest)} />
             )}
-            {isLocalIssueId(id) ? (
-              <LocalIssueComposer issueId={id} />
-            ) : (
-              <CommentInput
-                key={id}
-                issueId={id}
-                onSubmit={submitComment}
-                onAccepted={scrollToTimelineBottom}
-                onEditAnnotation={(annotationId) => descriptionAnnotations.editAnnotation(annotationId, true)}
-              />
-            )}
+            <CommentInput
+              key={id}
+              issueId={id}
+              onSubmit={submitComment}
+              onAccepted={scrollToTimelineBottom}
+              onEditAnnotation={(annotationId) => descriptionAnnotations.editAnnotation(annotationId, true)}
+            />
           </div>
         </div>
         </div>

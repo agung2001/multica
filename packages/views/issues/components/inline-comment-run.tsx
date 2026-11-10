@@ -10,6 +10,7 @@ import { useActorName } from "@multica/core/workspace/hooks";
 import { useTaskMessages } from "@multica/core/chat/queries";
 import { useCancelIssueRun, useRetryIssueRun } from "@multica/core/issues/mutations";
 import { issueTimelineOptions } from "@multica/core/issues/queries";
+import { isLocalTaskId } from "@multica/core/local-issues";
 import { commentSupplementReceipts } from "@multica/core/issues/run-steering";
 import { dispatchReasonCode } from "@multica/core/api";
 import type { AgentTask, TimelineEntry } from "@multica/core/types";
@@ -104,7 +105,10 @@ export function InlineCommentRun({ run, className, viewState, showIdentity = fal
   const regionId = useId();
   // Keep one disclosure button mounted across queued, live, and historical states.
   // Historical, collapsed runs still don't fetch transcripts.
-  const loadTranscript = task.status === "running" || (presentation === "inline" && expanded) || fullLogOpen;
+  // A local run keeps its answer in the agent reply comment below; there is
+  // no server transcript endpoint for it.
+  const localRun = isLocalTaskId(task.id);
+  const loadTranscript = !localRun && (task.status === "running" || (presentation === "inline" && expanded) || fullLogOpen);
   const { data, isPending, isError, refetch } = useTaskMessages(task.id, active, loadTranscript);
   const items = useMemo(() => buildTimeline(data ?? []), [data]);
   const formatText = useTraceIssueLabels(useWorkspaceId(), task.issue_id, items, loadTranscript);
@@ -168,7 +172,7 @@ export function InlineCommentRun({ run, className, viewState, showIdentity = fal
     <TooltipContent>{t(($) => $.inline_run.full_log)}</TooltipContent>
   </Tooltip>;
   // Before the agent session starts there is no transcript to open.
-  const hasTranscript = !PRE_RUN_STATUSES.includes(task.status);
+  const hasTranscript = !localRun && !PRE_RUN_STATUSES.includes(task.status);
   if (presentation === "header" && showCommentRunInHeader(run)) {
     return <span className="inline-flex shrink-0" data-comment-actions data-run-id={task.id}>
       {fullLogButton}

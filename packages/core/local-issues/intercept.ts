@@ -30,6 +30,7 @@ export function createLocalIssueIfBound(
     priority: data.priority ?? "none",
     agentId: data.assignee_id,
     agentName: "",
+    runtimeId: binding.runtimeId,
     command: binding.command,
     cwd: binding.cwd,
   });

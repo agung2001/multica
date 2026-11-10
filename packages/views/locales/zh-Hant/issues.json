@@ -1798,21 +1798,5 @@
       "empty_title": "還沒有儲存的檢視",
       "empty_description": "在任務列表裡調好篩選和顯示方式，然後另存為檢視。"
     }
-  },
-  "local_run": {
-    "you": "你",
-    "agent_fallback": "代理",
-    "draft": "尚未執行",
-    "running": "執行中",
-    "done": "已完成",
-    "failed": "失敗",
-    "stopped": "已停止",
-    "reply_placeholder": "回覆以繼續…",
-    "send": "傳送",
-    "hint": "按 Enter 傳送",
-    "run": "執行",
-    "stop": "停止",
-    "title": "在這台電腦上執行",
-    "idle": "還沒有執行紀錄。"
   }
 }

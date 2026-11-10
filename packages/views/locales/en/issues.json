@@ -1867,21 +1867,5 @@
       "empty_title": "No saved views yet",
       "empty_description": "Set up filters and display options in an issue list, then save them as a view."
     }
-  },
-  "local_run": {
-    "you": "You",
-    "agent_fallback": "Agent",
-    "draft": "Not run yet",
-    "running": "Running",
-    "done": "Finished",
-    "failed": "Failed",
-    "stopped": "Stopped",
-    "reply_placeholder": "Reply to keep it going…",
-    "send": "Send",
-    "hint": "Enter to send",
-    "run": "Run",
-    "stop": "Stop",
-    "title": "Runs on this machine",
-    "idle": "No runs yet."
   }
 }

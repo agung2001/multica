@@ -27,6 +27,11 @@ import {
   issueKeys,
 } from "@multica/core/issues/queries";
 import {
+  isLocalIssueId,
+  localIssueTimeline,
+  useLocalIssuesStore,
+} from "@multica/core/local-issues";
+import {
   useCreateComment,
   useUpdateComment,
   useDeleteComment,
@@ -118,10 +123,23 @@ export function useIssueTimeline(issueId: string, userId?: string) {
   const { t } = useT("issues");
   const qc = useQueryClient();
 
-  const query = useQuery(issueTimelineOptions(issueId));
+  const isLocal = isLocalIssueId(issueId);
+  // Local comments are the timeline and live in the device store. Subscribing
+  // here is what makes a streamed agent reply repaint through the ordinary
+  // comment cards, without a second local-only timeline component.
+  const localRecord = useLocalIssuesStore((state) =>
+    isLocal ? state.issues.find((entry) => entry.issue.id === issueId) ?? null : null,
+  );
+  const query = useQuery({
+    ...issueTimelineOptions(issueId),
+    enabled: !isLocal,
+  });
   const { data, isLoading: loading } = query;
 
-  const timeline = useMemo<TimelineEntry[]>(() => data ?? [], [data]);
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    if (isLocal) return localIssueTimeline(localRecord);
+    return data ?? [];
+  }, [data, isLocal, localRecord]);
 
   // Stable mutation handles. TanStack v5 returns a fresh result wrapper from
   // useMutation per render, but the inner mutateAsync / mutate functions are

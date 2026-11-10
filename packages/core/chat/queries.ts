@@ -1,6 +1,7 @@
 import { infiniteQueryOptions, queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { api } from "../api";
+import { localTaskRecord } from "../local-issues/store";
 import type { TaskMessagePayload } from "../types/events";
 import type {
   ChatQuickActionsFailureState,
@@ -201,7 +202,12 @@ export function chatDraftRestoresOptions(sessionId: string) {
 export function taskMessagesOptions(taskId: string) {
   return queryOptions({
     queryKey: chatKeys.taskMessages(taskId),
-    queryFn: () => api.listTaskMessages(taskId),
+    // Local runs keep their output in the agent's reply comment, not in a
+    // server transcript table, so there is nothing to fetch.
+    queryFn: () =>
+      localTaskRecord(taskId)
+        ? Promise.resolve([] as TaskMessagePayload[])
+        : api.listTaskMessages(taskId),
     enabled: isTaskMessageTaskId(taskId),
     staleTime: Infinity,
     // Every write to this cache — this fetch, a backfill, or a realtime batch —

@@ -34,6 +34,7 @@ import type {
   SourceContextPreview,
 } from "@multica/core/types";
 import { contentReferencesAttachment } from "@multica/core/types";
+import { isLocalIssueId } from "@multica/core/local-issues";
 import {
   DialogContent,
   DialogTitle,
@@ -635,7 +636,7 @@ export function ManualCreatePanel({
       // per-label attach so the user's labels aren't silently dropped. When
       // `labels` is present (current backend) the atomic path already ran, so
       // we skip this — no double-write, no per-label fan-out.
-      if (labelIds.length > 0 && issue.labels === undefined) {
+      if (!isLocalIssueId(issue.id) && labelIds.length > 0 && issue.labels === undefined) {
         const results = await Promise.allSettled(
           labelIds.map((labelId) =>
             attachLabelMutation.mutateAsync({ issueId: issue.id, labelId }),

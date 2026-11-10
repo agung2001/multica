@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "@multica/core/api";
 import { issueKeys } from "@multica/core/issues/queries";
+import { isLocalIssueId } from "@multica/core/local-issues";
 import { parseMentions } from "@multica/core/issues/comment-trigger-outcomes";
 import type { CommentTriggerPreviewAgent, CommentTriggerOutcome } from "@multica/core/types";
 
@@ -92,6 +93,7 @@ export function useCommentTriggerPreview({
   editingCommentId?: string;
   content: string;
 }): UseCommentTriggerPreviewResult {
+  const isLocal = isLocalIssueId(issueId);
   const signature = useMemo(() => commentTriggerPreviewSignature(content), [content]);
   const hasAllMembersMention = useMemo(
     () => parseMentions(content).some(({ type, id }) => type === "all" && id === "all"),
@@ -109,7 +111,7 @@ export function useCommentTriggerPreview({
   const previewQuery = useQuery({
     queryKey: [...issueKeys.commentTriggerPreview(issueId), parentKey, editingKey, debouncedSignature],
     queryFn: () => api.previewCommentTriggers(issueId, contentRef.current, parentId, editingCommentId),
-    enabled: signature !== "empty" && debouncedSignature !== "empty",
+    enabled: !isLocal && signature !== "empty" && debouncedSignature !== "empty",
     retry: false,
     // The answer depends on live queue state (pending-task dedup), not just
     // the mention set, so a cached result must revalidate when its signature
@@ -124,6 +126,12 @@ export function useCommentTriggerPreview({
         ? keepPreviousData(previousData)
         : undefined,
   });
+
+  // A local issue has no server-side trigger evaluator. Its bound agent is the
+  // only recipient, and a posted comment always starts its next run.
+  if (isLocal) {
+    return { agents: [], blocked: [], hasAllMembersMention, isCurrent: true };
+  }
 
   // Loading and errors intentionally surface as "no agents": the preview is
   // an enhancement, and the composer renders nothing for an empty list.
