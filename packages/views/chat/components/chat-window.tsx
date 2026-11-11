@@ -15,6 +15,7 @@ import {
 import { toast } from "sonner";
 import { useWorkspaceId } from "@multica/core/hooks";
 import { useAuthStore } from "@multica/core/auth";
+import { useReducedMotion } from "@multica/core/appearance";
 import { agentListOptions, memberListOptions } from "@multica/core/workspace/queries";
 import { projectListOptions } from "@multica/core/projects/queries";
 import { canAssignAgent } from "../../issues/components/pickers/assignee-picker";
@@ -22,7 +23,6 @@ import { api, dispatchReasonCode } from "@multica/core/api";
 import {
   isAgentRuntimeBound,
   useAgentPresenceDetail,
-  useCustomizeConversationStartersHref,
   useWorkspaceAgentAvailability,
 } from "@multica/core/agents";
 import { ActorAvatar } from "../../common/actor-avatar";
@@ -81,7 +81,9 @@ import { useChatOpenReveal } from "./use-chat-open-reveal";
 import { AgentRuntimeIndicator } from "./agent-runtime-indicator";
 import { ChatWindowMessages } from "./chat-window-messages";
 import { ChatInput } from "./chat-input";
+import { useChatAnnotations } from "./use-chat-annotations";
 import { ChatQueue } from "./chat-queue";
+import { ChatAppRequests } from "../../common/app-requests";
 import { EmptyState } from "./chat-empty-state";
 import { SessionRenameInput } from "./session-rename-input";
 import { SessionHistoryList } from "./session-history-list";
@@ -90,6 +92,8 @@ import { useChatContextItems } from "./use-chat-context-items";
 import { useChatResize } from "./use-chat-resize";
 import { useVisualViewportKeyboard } from "./use-visual-viewport-keyboard";
 import { useIsMobile } from "@multica/ui/hooks/use-mobile";
+import { CHAT_WINDOW_INSET, useChatWindowAnchor } from "./use-chat-window-anchor";
+import { useFormatTimeAgo } from "./use-format-time-ago";
 import {
   hasInFlightPendingTask,
   isStillOnComposeTarget,
@@ -99,7 +103,7 @@ import {
 import { useChatProjectContextSupport } from "./use-chat-project-context-support";
 import { createLogger } from "@multica/core/logger";
 import type { Agent, Attachment, ChatMessage, ChatSession, PendingChatTasksResponse } from "@multica/core/types";
-import { useLocale, useT } from "../../i18n";
+import { useT } from "../../i18n";
 
 const uiLogger = createLogger("chat.ui");
 const apiLogger = createLogger("chat.api");
@@ -271,13 +275,6 @@ export function ChatWindow() {
   const isAgentAccessRevoked =
     !!activeAgent && !canAssignAgent(activeAgent, user?.id, memberRole);
 
-  // "Customize" under the starter buttons — the only place the empty state
-  // admits that those buttons are configuration at all.
-  const customizeConversationStartersHref = useCustomizeConversationStartersHref(
-    activeAgent,
-    wsId,
-  );
-
   const projectContextSupport = useChatProjectContextSupport(wsId, activeAgent);
 
   // Three-state availability — "loading" stays neutral (no banner, no
@@ -286,6 +283,11 @@ export function ChatWindow() {
   // (server confirmed: zero usable agents) drives the disabled UI.
   const agentAvailability = useWorkspaceAgentAvailability();
   const noAgent = agentAvailability === "none";
+  const annotations = useChatAnnotations({
+    sessionId: activeSessionId,
+    agentName: activeAgent?.name,
+    enabled: !isSessionArchived && !isAgentArchived && !isAgentAccessRevoked && activeAgentRuntimeBound && !noAgent,
+  });
 
   // Presence drives both the avatar status dot (via ActorAvatar) and the
   // OfflineBanner / TaskStatusPill availability copy. `useAgentPresenceDetail`
@@ -800,6 +802,7 @@ export function ChatWindow() {
   const isExpanded = useChatStore((s) => s.isExpanded);
 
   const { renderWidth, renderHeight, isAtMax, boundsReady, isDragging, toggleExpand, startDrag } = useChatResize(windowRef);
+  const reduceMotion = useReducedMotion();
   const { contentReady, markContentReady } = useChatOpenReveal(isOpen);
 
   const isVisible = isOpen && (isExpanded || boundsReady) && contentReady;
@@ -816,7 +819,7 @@ export function ChatWindow() {
     "absolute z-50 flex flex-col overflow-hidden bg-surface-raised @container",
     isMobile
       ? "inset-x-0"
-      : "right-2 rounded-xl shadow-[var(--floating-shadow)] ring-1 ring-surface-border",
+      : "rounded-xl shadow-[var(--floating-shadow)] ring-1 ring-foreground/15",
   );
   // Soft keyboards shrink only the *visual* viewport — the layout viewport
   // (and this panel's bottom-anchored parent) keeps its full height, so
@@ -832,6 +835,7 @@ export function ChatWindow() {
   // disappears from the style prop, so a conditional spread here would
   // leave the keyboard geometry stuck on the DOM after the keyboard closes.
   const keyboard = useVisualViewportKeyboard();
+  const anchorRight = useChatWindowAnchor(windowRef, isOpen, renderWidth, isDragging);
   const containerStyle: React.CSSProperties = {
     transformOrigin: "bottom right",
     pointerEvents: isOpen ? "auto" : "none",
@@ -840,13 +844,15 @@ export function ChatWindow() {
           // Full-screen panel anchored to the visible bottom edge;
           // width/height live in the motion animate below.
           top: "auto",
+          right: 0,
           bottom: keyboard ? keyboard.occludedBottom : 0,
           maxHeight: "none",
         }
       : {
           // Floating card; only the anchor and the height cap live here.
           top: "auto",
-          bottom: keyboard ? keyboard.occludedBottom + 8 : 8,
+          right: anchorRight,
+          bottom: keyboard ? keyboard.occludedBottom + CHAT_WINDOW_INSET : CHAT_WINDOW_INSET,
           maxHeight: keyboard ? keyboard.viewportHeight - 16 : "none",
         }),
   };
@@ -865,10 +871,21 @@ export function ChatWindow() {
     : { width: renderWidth, height: renderHeight };
 
   const contextItems = useChatContextItems(wsId);
+  const pageContext = contextItems.find((item) => item.group === "current") ?? null;
   const queuedTasks = pendingTask?.queued_tasks ?? [];
+
+  const showRestore = isExpanded || isAtMax;
+  const newChatLabel = t(($) => $.window.new_chat_tooltip);
+  const expandLabel = showRestore
+    ? t(($) => $.window.restore_tooltip)
+    : t(($) => $.window.expand_tooltip);
+  const minimizeLabel = t(($) => $.window.minimize_tooltip);
+  const sizeTransition =
+    isDragging || reduceMotion ? { duration: 0 } : { type: "spring" as const, duration: 0.3, bounce: 0 };
 
   return (
     <motion.div
+      data-mc="chat-window"
       ref={windowRef}
       inert={!isOpen}
       aria-hidden={!isOpen}
@@ -880,8 +897,8 @@ export function ChatWindow() {
         ...motionSize,
       }}
       transition={{
-        width: isDragging ? { duration: 0 } : { type: "spring", duration: 0.3, bounce: 0 },
-        height: isDragging ? { duration: 0 } : { type: "spring", duration: 0.3, bounce: 0 },
+        width: sizeTransition,
+        height: sizeTransition,
         opacity: { duration: 0.15 },
       }}
     >
@@ -896,13 +913,14 @@ export function ChatWindow() {
                   variant="ghost"
                   size="icon-sm"
                   className="text-muted-foreground"
+                  aria-label={newChatLabel}
                   onClick={handleNewChat}
                 />
               }
             >
               <Plus />
             </TooltipTrigger>
-            <TooltipContent side="top">{t(($) => $.window.new_chat_tooltip)}</TooltipContent>
+            <TooltipContent side="top">{newChatLabel}</TooltipContent>
           </Tooltip>
           <SessionDropdown
             sessions={sessions}
@@ -923,15 +941,14 @@ export function ChatWindow() {
                     variant="ghost"
                     size="icon-sm"
                     className="text-muted-foreground"
+                    aria-label={expandLabel}
                     onClick={toggleExpand}
                   />
                 }
               >
-                {isExpanded || isAtMax ? <Minimize2 /> : <Maximize2 />}
+                {showRestore ? <Minimize2 /> : <Maximize2 />}
               </TooltipTrigger>
-              <TooltipContent side="top">
-                {isExpanded || isAtMax ? t(($) => $.window.restore_tooltip) : t(($) => $.window.expand_tooltip)}
-              </TooltipContent>
+              <TooltipContent side="top">{expandLabel}</TooltipContent>
             </Tooltip>
           )}
           <Tooltip>
@@ -941,6 +958,7 @@ export function ChatWindow() {
                   variant="ghost"
                   size="icon-sm"
                   className="text-muted-foreground"
+                  aria-label={minimizeLabel}
                   onClick={handleMinimize}
                 />
               }
@@ -948,7 +966,7 @@ export function ChatWindow() {
               <Minus />
             </TooltipTrigger>
             <TooltipContent side="top">
-              {t(($) => $.window.minimize_tooltip)}
+              {minimizeLabel}
               <ActionShortcutKeycaps action="toggleChat" />
             </TooltipContent>
           </Tooltip>
@@ -974,12 +992,12 @@ export function ChatWindow() {
             }
             quickActionsPendingMessageId={quickActionsPending?.message_id ?? null}
             onReady={markContentReady}
+            annotations={annotations}
           >
             <EmptyState
               agent={activeAgent}
               hasSessions={sessions.length > 0}
               onPickPrompt={sendConversationStarter}
-              customizeHref={customizeConversationStartersHref}
             />
           </ChatWindowMessages>
         )}
@@ -1008,6 +1026,10 @@ export function ChatWindow() {
       ) : (
         <OfflineBanner agentName={activeAgent?.name} availability={availability} />
       )}
+
+      <div className="px-4">
+        <ChatAppRequests sessionId={activeSessionId} />
+      </div>
 
       <ChatQueue
         tasks={queuedTasks}
@@ -1059,7 +1081,9 @@ export function ChatWindow() {
           />
         }
         contextItems={contextItems}
+        pageContext={pageContext}
         focusRequest={focusRequest}
+        annotations={annotations}
       />
     </motion.div>
   );
@@ -1676,23 +1700,4 @@ function SessionDropdown({
       </Popover>
     </>
   );
-}
-
-function useFormatTimeAgo(): (dateStr: string) => string {
-  const { t } = useT("chat");
-  const locale = useLocale();
-  return (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return t(($) => $.session_history.time.just_now);
-    if (diffMins < 60) return t(($) => $.session_history.time.minutes, { count: diffMins });
-    if (diffHours < 24) return t(($) => $.session_history.time.hours, { count: diffHours });
-    if (diffDays < 7) return t(($) => $.session_history.time.days, { count: diffDays });
-    return date.toLocaleDateString(locale);
-  };
 }

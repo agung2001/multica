@@ -43,6 +43,11 @@ function workspaceScoped(slug: string) {
     issues: () => `${ws}/issues`,
     // Private board: drafts and runs that exist only on this device.
     issueDetail: (id: string) => `${ws}/issues/${encode(id)}`,
+    // Opens the newest upload of the deliverable named `filename` on this
+    // issue. Addresses the file by name, not by attachment id, so the link
+    // keeps pointing at the latest version as new ones are uploaded.
+    issueDeliverable: (id: string, filename: string) =>
+      `${ws}/issues/${encode(id)}/deliverables/${encode(filename)}`,
     projects: () => `${ws}/projects`,
     projectDetail: (id: string) => `${ws}/projects/${encode(id)}`,
     autopilots: () => `${ws}/autopilots`,
@@ -63,9 +68,7 @@ function workspaceScoped(slug: string) {
     newAgentAiSession: (sessionId: string) =>
       `${ws}/agents/new/ai/${encode(sessionId)}`,
     agentDetail: (id: string) => `${ws}/agents/${encode(id)}`,
-    // Deep link behind "customize" in a chat's empty state: the agent's
-    // General settings, scrolled to the conversation starters that produced
-    // the buttons the viewer just looked at.
+    // The agent's General settings, scrolled to its conversation starters.
     agentConversationStarters: (id: string) =>
       `${ws}/agents/${encode(id)}?view=general&focus=${AGENT_FOCUS_CONVERSATION_STARTERS}`,
     memberDetail: (id: string) => `${ws}/members/${encode(id)}`,
